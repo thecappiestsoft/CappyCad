@@ -1,7 +1,10 @@
 # Biblioteki i zasoby zewnętrzne
 
-Program wbudowuje (w pliku `app/app.js` lub `CappyCad.html`) poniższe biblioteki. Ich licencje pozwalają na
-użycie w programie zamkniętym i komercyjnym pod warunkiem zachowania informacji o prawach autorskich i licencji.
+CappyCad jest udostępniony na licencji **MIT** (plik `LICENSE`, © 2026 CappySoft.pl).
+
+Program wbudowuje (w pliku `app/app.js` lub `CappyCad.html`) poniższe biblioteki. Ich licencje są zgodne z MIT
+i pozwalają na użycie, także komercyjne, pod warunkiem zachowania informacji o prawach autorskich i licencji —
+dlatego budowanie zachowuje komentarze licencyjne bibliotek na końcu kodu (`legalComments: 'eof'`).
 
 | Składnik                  | Do czego służy                                   | Licencja       |
 | ------------------------- | ------------------------------------------------ | -------------- |

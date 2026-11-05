@@ -26,3 +26,4 @@ the light/dark theme with the sun/moon button (or the T key). Press F1 for help 
 CappyCad works fully offline: no accounts, no data sent anywhere.
 
 © 2026 CappySoft.pl
+MIT License · www.cappysoft.pl · thecappiestsoft@gmail.com

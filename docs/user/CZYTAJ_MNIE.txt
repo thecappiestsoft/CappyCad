@@ -50,3 +50,4 @@ CappyCad działa całkowicie lokalnie: nie wysyła danych, nie wymaga kont uczni
 i nie łączy się z internetem. Otwiera też projekty z wcześniejszych wersji (.capycad, .blokcad).
 
 © 2026 CappySoft.pl
+Licencja MIT · www.cappysoft.pl · thecappiestsoft@gmail.com

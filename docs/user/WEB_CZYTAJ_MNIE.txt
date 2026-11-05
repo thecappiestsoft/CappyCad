@@ -23,3 +23,4 @@ English: open index.html in any modern browser, or upload it to your school web 
 Everything runs locally in the browser; nothing is sent anywhere.
 
 © 2026 CappySoft.pl
+Licencja MIT · www.cappysoft.pl · thecappiestsoft@gmail.com

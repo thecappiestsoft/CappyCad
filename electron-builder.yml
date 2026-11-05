@@ -42,6 +42,7 @@ nsis:
   installerIcon: assets/icon.ico
   uninstallerIcon: assets/icon.ico
   language: "1045"
+  license: LICENSE # strona z licencją MIT w instalatorze
   artifactName: CappyCad-${version}-Windows-Setup.${ext}
 
 # ---------------------------------------------------------------- macOS
@@ -63,7 +64,7 @@ linux:
   executableName: cappycad
   synopsis: Prosty modelarz 3D dla szkół (offline)
   description: CappyCad — prosty modelarz 3D dla szkół, działający bez internetu. Eksport STL/OBJ do druku 3D.
-  maintainer: CappySoft.pl <lukasz.szymkowski@infotech.edu.pl>
+  maintainer: CappySoft.pl <thecappiestsoft@gmail.com>
   desktop:
     entry:
       Name: CappyCad

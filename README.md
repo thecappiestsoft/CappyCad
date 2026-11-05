@@ -3,7 +3,7 @@
 Prosty modelarz 3D dla szkół w stylu Tinkercada, działający **w pełni offline**.
 Wersje: Windows, macOS (Intel i Apple Silicon), Linux (Debian/Ubuntu, Arch, AppImage) oraz **jeden plik HTML** do przeglądarki.
 
-© 2026 CappySoft.pl
+© 2026 CappySoft.pl · [www.cappysoft.pl](https://www.cappysoft.pl) · thecappiestsoft@gmail.com · licencja [MIT](LICENSE)
 
 ---
 
@@ -100,5 +100,14 @@ Szczegóły: **[docs/ARCHITEKTURA.md](docs/ARCHITEKTURA.md)**.
 
 ## Licencja
 
-Kod: © 2026 CappySoft.pl, wszelkie prawa zastrzeżone (`"license": "UNLICENSED"` w `package.json`) — do ustalenia
-przez właściciela przed publikacją. Biblioteki zewnętrzne i ich licencje: [docs/LICENCJE-ZEWNETRZNE.md](docs/LICENCJE-ZEWNETRZNE.md).
+**MIT** — © 2026 CappySoft.pl ([www.cappysoft.pl](https://www.cappysoft.pl)). Pełny tekst: [LICENSE](LICENSE).
+Możesz używać, zmieniać i rozpowszechniać program (także komercyjnie), pod warunkiem dołączenia informacji
+o prawach autorskich i tekstu licencji.
+
+Biblioteki zewnętrzne i ich licencje: [docs/LICENCJE-ZEWNETRZNE.md](docs/LICENCJE-ZEWNETRZNE.md).
+Informacje licencyjne bibliotek są zachowywane w zbudowanym kodzie (`legalComments: 'eof'` w `scripts/esbuild-options.mjs`),
+a tekst licencji programu trafia do każdej wersji (`app/LICENSE.txt`, strona licencji w instalatorze Windows).
+
+## Kontakt
+
+[www.cappysoft.pl](https://www.cappysoft.pl) · thecappiestsoft@gmail.com

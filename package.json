@@ -1,16 +1,16 @@
 {
   "name": "cappycad",
   "productName": "CappyCad",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "description": "CappyCad — prosty modelarz 3D dla szkół, działający offline (Electron + Three.js + Manifold)",
   "main": "electron/main.js",
   "author": {
     "name": "CappySoft.pl",
-    "email": "lukasz.szymkowski@infotech.edu.pl"
+    "email": "thecappiestsoft@gmail.com",
+    "url": "https://www.cappysoft.pl"
   },
-  "homepage": "https://cappysoft.pl",
-  "license": "UNLICENSED",
-  "private": true,
+  "homepage": "https://www.cappysoft.pl",
+  "license": "MIT",
   "desktopName": "cappycad.desktop",
   "engines": {
     "node": ">=20"

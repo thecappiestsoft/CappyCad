@@ -7,7 +7,7 @@ export const rendererBuild = {
   bundle: true,
   minify: true,
   format: 'iife',
-  legalComments: 'none',
+  legalComments: 'eof', // informacje licencyjne bibliotek (MIT, Apache-2.0) na końcu kodu — wymóg ich licencji
   loader: {
     '.json': 'json', // dane: czcionka, obrys kapibary
     '.wasm': 'binary', // silnik brył Manifold — wbudowany w kod jako Uint8Array
