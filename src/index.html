@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'">
+<title>CappyCad</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="brand"><img src="icon.png" alt=""><span>Cappy<b>Cad</b></span></div>
+    <input id="projName" value="Bez tytułu" spellcheck="false" title="Nazwa projektu">
+    <span id="saveState"></span>
+    <div class="tb-group">
+      <button class="tb" id="bNew" data-icon="new" title="Nowy projekt (Ctrl+N)"><span>Nowy</span></button>
+      <button class="tb" id="bOpen" data-icon="open" title="Otwórz projekt (Ctrl+O)"><span>Otwórz</span></button>
+      <button class="tb" id="bSave" data-icon="save" title="Zapisz (Ctrl+S)"><span>Zapisz</span></button>
+      <button class="tb icon-only" id="bSaveAs" data-icon="saveas" title="Zapisz jako… (Ctrl+Shift+S)"></button>
+    </div>
+    <div class="spacer"></div>
+    <div class="tb-group">
+      <button class="tb" id="bLessons" data-icon="book" data-notr title="Przykładowe projekty i ćwiczenia"><span>Lekcje</span></button>
+      <div class="menu-wrap">
+        <button class="tb" data-icon="insert" title="Wstaw model, grafikę SVG lub obraz"><span>Wstaw</span></button>
+        <div class="menu">
+          <button id="miModel" data-icon="import"><div><b>Model 3D (STL, OBJ)…</b><small>Gotowy model z innego programu</small></div></button>
+          <button id="miSvg" data-icon="star"><div><b>Grafika SVG jako bryła 3D…</b><small>Logo, ikona, rysunek wektorowy</small></div></button>
+          <button id="miImage" data-icon="image"><div><b>Obraz jako szablon…</b><small>Rysunek lub zdjęcie do odrysowania</small></div></button>
+        </div>
+      </div>
+      <div class="menu-wrap">
+        <button class="tb accent" data-icon="export" title="Eksport do druku 3D"><span>Eksport</span></button>
+        <div class="menu right">
+          <button id="meStl" data-icon="export"><div><b>STL — do druku 3D</b><small>Ctrl+E · zaznaczone lub wszystkie bryły</small></div></button>
+          <button id="meObj" data-icon="export"><div><b>OBJ — z kolorami</b><small>Do innych programów 3D i drukarek wielokolorowych</small></div></button>
+          <button id="mePng" data-icon="image"><div><b>Obraz PNG widoku</b><small>Zrzut do prezentacji lub sprawozdania</small></div></button>
+        </div>
+      </div>
+      <button class="lang-switch" id="bLang" role="switch" aria-checked="false" title="Język / Language — kliknij, aby przełączyć" data-notr>
+        <span class="ls-opt" data-l="pl">PL</span><span class="ls-opt" data-l="en">EN</span><span class="ls-knob"></span>
+      </button>
+      <div class="menu-wrap">
+        <button class="tb icon-only" id="bTheme" title="Motyw"></button>
+        <div class="menu right narrow">
+          <button data-theme-set="light" data-icon="sun"><div><b>Jasny</b></div></button>
+          <button data-theme-set="dark" data-icon="moon"><div><b>Ciemny</b></div></button>
+          <button data-theme-set="system" data-icon="monitor"><div><b>Jak w systemie</b><small>Dopasowuje się do ustawień komputera</small></div></button>
+        </div>
+      </div>
+      <button class="tb icon-only" id="bHelp" data-icon="help" title="Pomoc (F1)"></button>
+    </div>
+  </header>
+  <nav id="toolbar">
+    <div class="tb-group">
+      <button class="tb icon-only" id="bUndo" data-icon="undo" title="Cofnij (Ctrl+Z)"></button>
+      <button class="tb icon-only" id="bRedo" data-icon="redo" title="Ponów (Ctrl+Y)"></button>
+    </div>
+    <div class="sep"></div>
+    <div class="tb-group">
+      <button class="tb icon-only" id="bCopy" data-icon="copy" title="Kopiuj (Ctrl+C)"></button>
+      <button class="tb icon-only" id="bPaste" data-icon="paste" title="Wklej (Ctrl+V)"></button>
+      <button class="tb icon-only" id="bDup" data-icon="dup" title="Duplikuj (Ctrl+D)"></button>
+      <button class="tb icon-only" id="bDel" data-icon="trash" title="Usuń (Delete)"></button>
+    </div>
+    <div class="sep"></div>
+    <div class="tb-group">
+      <button class="tb" id="bGroup" data-icon="group" title="Grupuj — łączy bryły i wycina otwory (Ctrl+G)"><span>Grupuj</span></button>
+      <button class="tb" id="bUngroup" data-icon="ungroup" title="Rozgrupuj (Ctrl+Shift+G)"><span>Rozgrupuj</span></button>
+      <button class="tb" id="bDrop" data-icon="drop" title="Połóż na płaszczyźnie (D)"><span>Połóż</span></button>
+    </div>
+    <div class="sep"></div>
+    <div class="seg" id="modeSeg">
+      <button data-mode="translate" data-icon="move" title="Przesuwanie (M)"><span>Przesuń</span></button>
+      <button data-mode="rotate" data-icon="rotate" title="Obracanie (R)"><span>Obróć</span></button>
+      <button data-mode="scale" data-icon="scale" title="Skalowanie (S)"><span>Skaluj</span></button>
+      <button data-mode="none" data-icon="pointer" title="Bez strzałek (Q)"></button>
+    </div>
+    <div class="sep"></div>
+    <button class="tb mobile-only" id="bShapes" data-icon="insert" title="Kształty"><span>Kształty</span></button>
+    <div class="tb-group">
+      <button class="tb toggle" id="bRuler" data-icon="ruler" title="Miarka — mierz odległości (L)"><span>Miarka</span></button>
+      <button class="tb toggle" id="bSketch" data-icon="pen" title="Narysuj własny kształt (P)"><span>Rysuj</span></button>
+    </div>
+  </nav>
+  <main>
+    <section id="viewport" tabindex="-1">
+      <div id="dimLabel" data-notr></div>
+      <div id="marquee"></div>
+      <div id="toolBanner"></div>
+      <div id="viewBtns">
+        <button data-view="home" data-icon="home" title="Widok domyślny"></button>
+        <button id="vFit" data-icon="fit" title="Dopasuj (F)"></button>
+        <button id="vIn" data-icon="zin" title="Przybliż"></button>
+        <button id="vOut" data-icon="zout" title="Oddal"></button>
+        <div class="vsep"></div>
+        <button data-view="top" class="txt" title="Widok z góry">Góra</button>
+        <button data-view="front" class="txt" title="Widok z przodu">Przód</button>
+        <button data-view="right" class="txt" title="Widok z prawej">Prawo</button>
+        <button data-view="left" class="txt" title="Widok z lewej">Lewo</button>
+        <button data-view="back" class="txt" title="Widok z tyłu">Tył</button>
+      </div>
+      <aside id="inspector"></aside>
+      <button id="inspTab" type="button" title="Rozwiń panel obiektu (I) — kliknij lub przeciągnij w lewo"><span class="tab-chev">‹</span><span class="tab-name" data-notr></span><span class="tab-grip"></span></button>
+      <div id="capy"></div>
+      <aside id="exPanel" data-notr></aside>
+      <div id="mouseHint">PPM — obrót widoku · Kółko — zoom · Shift+PPM — przesuwanie widoku</div>
+    </section>
+    <aside id="sidebar">
+      <div class="panel" id="palPanel"><h3>Kształty</h3><div id="palette"></div></div>
+      <div class="panel" id="tplPanel" style="display:none"><h3>Szablony</h3><div id="tplList"></div></div>
+    </aside>
+  </main>
+  <footer id="statusbar">
+    <label>Siatka <select id="snap">
+      <option value="0">wył.</option><option value="0.1">0,1 mm</option><option value="0.25">0,25 mm</option><option value="0.5">0,5 mm</option>
+      <option value="1" selected>1 mm</option><option value="2">2 mm</option><option value="5">5 mm</option><option value="10">10 mm</option></select></label>
+    <label>Kąt <select id="angle">
+      <option value="0">wył.</option><option value="1">1°</option><option value="5">5°</option><option value="15" selected>15°</option><option value="45">45°</option><option value="90">90°</option></select></label>
+    <button id="wpBtn" class="link" data-icon="plane" title="Zmień wymiary płaszczyzny roboczej"><span id="wpLabel">200 × 200 mm</span></button>
+    <span class="spacer"></span>
+    <span id="copyright" data-notr>© 2026 CappySoft.pl</span>
+    <span class="spacer"></span>
+    <span id="objCount">Obiekty: 0</span>
+  </footer>
+</div>
+<div id="modal"><div id="modalBody"></div></div>
+<div id="toast"></div>
+<div id="busy"><div class="spinner"></div><span id="busyMsg"></span></div>
+<script src="app.js"></script>
+</body>
+</html>

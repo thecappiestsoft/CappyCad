@@ -1,0 +1,52 @@
+CappyCad — prosty modelarz 3D dla szkół (offline)
+=================================================
+
+KTÓRY PLIK POBRAĆ?
+  Windows 10/11 ............ CappyCad-*-Windows-Setup.exe   (instalator, skrót w menu Start)
+                             CappyCad-*-Windows-x64-portable.zip  (bez instalacji, np. z pendrive'a)
+  macOS (Apple M1/M2/M3/M4)  CappyCad-*-macOS-arm64.zip
+  macOS (Intel) ............ CappyCad-*-macOS-x64.zip
+  Ubuntu / Debian / Mint ... CappyCad-*-Debian-Ubuntu-amd64.deb
+  Arch / Manjaro / EndeavourOS  CappyCad-*-Arch-x86_64.pkg.tar.xz
+  Inne Linuksy ............. CappyCad-*-Linux-x86_64.AppImage  lub  .tar.gz
+  Przeglądarka (bez instalacji)  CappyCad-*-Web.zip  (index.html — z dysku lub serwera szkoły)
+  SHA256SUMS.txt ........... sumy kontrolne do sprawdzenia pobranych plików
+
+INSTALACJA
+  Windows: uruchom instalator. SmartScreen może ostrzec (program nie ma płatnego
+    podpisu cyfrowego): „Więcej informacji” → „Uruchom mimo to”.
+  macOS: rozpakuj ZIP i przenieś CappyCad do Aplikacji. Przy pierwszym uruchomieniu
+    kliknij prawym przyciskiem → Otwórz. Jeśli system nadal blokuje: Ustawienia systemowe
+    → Prywatność i ochrona → „Otwórz mimo to”, albo w Terminalu:
+      xattr -cr /Applications/CappyCad.app
+  Ubuntu/Debian:  sudo apt install ./CappyCad-*-Debian-Ubuntu-amd64.deb
+  Arch:           sudo pacman -U CappyCad-*-Arch-x86_64.pkg.tar.xz
+  AppImage:       chmod +x CappyCad-*.AppImage && ./CappyCad-*.AppImage
+
+PODSTAWY
+- Kliknij kształt w palecie lub przeciągnij go na płaszczyznę roboczą.
+- Lewy przycisk: zaznacz i przesuwaj. Prawy: obrót widoku. Kółko: zoom.
+- Białe uchwyty na krawędziach zmieniają rozmiar od strony krawędzi, czarny u góry — wysokość
+  (Shift — proporcjonalnie).
+- Panel obiektu: wymiary, obrót, kolor, parametry, wyginanie/skręcanie/zwężanie,
+  odbicie lustrzane, „Zapisz jako mój kształt”.
+- Dziury: ustaw obiekt jako „Otwór”, zaznacz go z bryłą i kliknij „Grupuj”.
+- Miarka (L), Rysuj własny kształt (P), Wstaw: model STL/OBJ, SVG jako bryła, obraz jako szablon.
+- Eksport: STL (druk 3D), OBJ (z kolorami), PNG.
+- Śruby, nakrętki, otwory gwintowane i gniazda nakrętek M2–M16 w wymiarach ISO.
+- Lekcje: 10 przykładowych projektów (brelok, domek, pudełko z pokrywką, śruba z nakrętką,
+  podstawka pod telefon, bryły platońskie…) i 8 ćwiczeń krok po kroku z automatycznym odhaczaniem.
+- Banan do skali (ok. 18 cm) — porównaj wielkość swojego projektu.
+- Cappy (kapibara w lewym dolnym rogu) podpowiada w trakcie pracy i daje porady po kliknięciu.
+  Podpowiedzi można wyciszyć w dymku („Wycisz podpowiedzi”).
+- Język polski / angielski: przełącznik PL | EN w prawym górnym rogu.
+- Panel obiektu można zwinąć (› lub klawisz I) — zostaje zwinięty dla kolejnych obiektów;
+  rozwiniesz go, klikając lub przeciągając w lewo uchwyt przy prawej krawędzi.
+- Motyw jasny / ciemny: przycisk z księżycem/słońcem w prawym górnym rogu lub klawisz T.
+- Pełna lista skrótów: klawisz F1.
+
+PRYWATNOŚĆ
+CappyCad działa całkowicie lokalnie: nie wysyła danych, nie wymaga kont uczniów
+i nie łączy się z internetem. Otwiera też projekty z wcześniejszych wersji (.capycad, .blokcad).
+
+© 2026 CappySoft.pl

@@ -1,0 +1,88 @@
+# Konfiguracja pakowania wersji desktopowych (electron-builder).
+# Uruchamiane przez skrypty build-windows.bat / build-macos.command / build-linux.sh
+# albo ręcznie: npm run dist:win | dist:mac | dist:linux
+appId: pl.cappysoft.cappycad
+productName: CappyCad
+copyright: © 2026 CappySoft.pl
+directories:
+  output: release
+  buildResources: assets
+afterPack: scripts/after-pack.cjs
+publish: null
+
+# Do paczki trafia tylko to, co potrzebne do uruchomienia — biblioteki są już w app/app.js
+files:
+  - electron/**
+  - app/**
+  - package.json
+
+fileAssociations:
+  - ext: cappycad
+    name: Projekt CappyCad
+    description: Projekt CappyCad
+    mimeType: application/x-cappycad
+    role: Editor
+
+# ---------------------------------------------------------------- Windows
+win:
+  target:
+    - target: nsis # instalator
+      arch: [x64]
+    - target: zip # wersja przenośna (bez instalacji)
+      arch: [x64]
+  artifactName: CappyCad-${version}-Windows-x64-portable.${ext}
+  icon: assets/icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: CappyCad
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  language: "1045"
+  artifactName: CappyCad-${version}-Windows-Setup.${ext}
+
+# ---------------------------------------------------------------- macOS
+mac:
+  target:
+    - target: zip
+      arch: [x64, arm64] # Intel i Apple Silicon
+  icon: assets/icon.icns
+  category: public.app-category.education
+  identity: null # bez płatnego certyfikatu Apple; podpis ad-hoc robi scripts/after-pack.cjs
+  artifactName: CappyCad-${version}-macOS-${arch}.${ext}
+
+# ---------------------------------------------------------------- Linux
+linux:
+  syncDesktopName: true
+  artifactName: CappyCad-${version}-Linux-x86_64.${ext} # AppImage i tar.gz (deb i pacman mają własne nazwy)
+  icon: assets/icon.png
+  category: Education;Graphics;3DGraphics
+  executableName: cappycad
+  synopsis: Prosty modelarz 3D dla szkół (offline)
+  description: CappyCad — prosty modelarz 3D dla szkół, działający bez internetu. Eksport STL/OBJ do druku 3D.
+  maintainer: CappySoft.pl <lukasz.szymkowski@infotech.edu.pl>
+  desktop:
+    entry:
+      Name: CappyCad
+      Comment: Modelarz 3D dla szkół
+      Keywords: 3D;CAD;druk;STL;Tinkercad;
+  target:
+    - target: deb # Debian, Ubuntu, Mint
+      arch: [x64]
+    - target: AppImage # dowolny Linux
+      arch: [x64]
+    - target: tar.gz
+      arch: [x64]
+    - target: pacman # Arch, Manjaro (wymaga programu bsdtar)
+      arch: [x64]
+deb:
+  artifactName: CappyCad-${version}-Debian-Ubuntu-amd64.${ext}
+  depends: [libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libuuid1, libsecret-1-0, libasound2 | libasound2t64]
+pacman:
+  artifactName: CappyCad-${version}-Arch-x86_64.pkg.tar.xz
+  depends: [gtk3, nss, libxss, libxtst, xdg-utils, at-spi2-core, alsa-lib]
+appImage:
+  artifactName: CappyCad-${version}-Linux-x86_64.${ext}

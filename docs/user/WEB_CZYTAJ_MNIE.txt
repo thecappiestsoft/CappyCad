@@ -1,0 +1,25 @@
+CappyCad — wersja webowa (przeglądarka) / web version
+=====================================================
+
+Plik index.html zawiera cały program (ok. 1,3 MB). Nie wymaga instalacji ani internetu.
+
+JAK UŻYĆ
+- Z dysku lub pendrive'a: kliknij dwukrotnie index.html (Chrome, Edge, Firefox, Safari).
+- Na serwerze szkoły: wgraj index.html do dowolnego folderu strony WWW
+  (np. https://szkola.pl/cappycad/) — uczniowie otwierają adres w przeglądarce.
+- W Moodle / Google Classroom: dodaj index.html jako plik do pobrania.
+
+WARTO WIEDZIEĆ
+- Projekty zapisują się jako pliki .cappycad do folderu Pobrane (przycisk Zapisz / Ctrl+S).
+  Otworzysz je ponownie przyciskiem Otwórz — także w wersji na komputer.
+- Przeglądarka pamięta ostatni niezapisany stan, ale tylko na tym komputerze
+  i w tej przeglądarce. Zapisuj projekty do pliku.
+- Biblioteka „Moje kształty” jest zapisana w przeglądarce — przenieś ją eksportem do pliku.
+- Działa też na tabletach: jeden palec obraca widok lub przesuwa obiekt, dwa palce — zoom.
+- Wymagana przeglądarka z obsługą WebGL 2 (każda nowa wersja Chrome, Edge, Firefox, Safari).
+
+-----
+English: open index.html in any modern browser, or upload it to your school web server.
+Everything runs locally in the browser; nothing is sent anywhere.
+
+© 2026 CappySoft.pl

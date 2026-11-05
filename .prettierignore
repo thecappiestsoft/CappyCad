@@ -1,0 +1,6 @@
+app/
+dist/
+release/
+node_modules/
+src/data/
+*.html

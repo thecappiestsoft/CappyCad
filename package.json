@@ -1,0 +1,43 @@
+{
+  "name": "cappycad",
+  "productName": "CappyCad",
+  "version": "2.6.0",
+  "description": "CappyCad — prosty modelarz 3D dla szkół, działający offline (Electron + Three.js + Manifold)",
+  "main": "electron/main.js",
+  "author": {
+    "name": "CappySoft.pl",
+    "email": "lukasz.szymkowski@infotech.edu.pl"
+  },
+  "homepage": "https://cappysoft.pl",
+  "license": "UNLICENSED",
+  "private": true,
+  "desktopName": "cappycad.desktop",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "npm run build && electron .",
+    "build": "node scripts/build.mjs",
+    "build:html": "node scripts/build-html.mjs",
+    "test": "npm run build && node test/run.mjs",
+    "check:mesh": "node tools/check-mesh.mjs",
+    "format": "prettier --write \"src/**/*.{js,css}\" \"electron/**/*.js\" \"scripts/**/*.{js,mjs,cjs}\" \"test/**/*.{js,mjs,cjs}\" \"tools/**/*.mjs\"",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux deb AppImage tar.gz",
+    "dist:linux:arch": "npm run build && electron-builder --linux pacman",
+    "dist:all": "node scripts/build-all.mjs"
+  },
+  "devDependencies": {
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0",
+    "esbuild": "0.28.2",
+    "manifold-3d": "3.5.4",
+    "opentype.js": "2.0.0",
+    "polygon-clipping": "0.15.7",
+    "prettier": "3.7.4",
+    "three": "0.186.1",
+    "three-bvh-csg": "0.0.18",
+    "three-mesh-bvh": "0.9.16"
+  }
+}
