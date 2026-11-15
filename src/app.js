@@ -35,6 +35,7 @@ import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import * as csg from './csg.js';
 import {
   SHAPES,
@@ -1418,7 +1419,13 @@ function mergePositions(geoms) {
 function exportRoot(list, withColors) {
   const root = new THREE.Group();
   for (const o of list) {
-    let g = worldGeometry(o);
+    // OBJ zapisuje wierzchołki tak, jak są w geometrii. Bez scalenia każdy trójkąt miałby własne
+    // wierzchołki i slicer widziałby same oderwane ściany (tysiące „non-manifold edges”).
+    // Normalne są usuwane, bo przy wspólnych wierzchołkach dawałyby wygładzone cieniowanie;
+    // programy i slicery wyliczają je same z trójkątów.
+    let g = worldGeometry(o).clone();
+    g.deleteAttribute('normal');
+    g = mergeVertices(g, 1e-6);
     if (withColors) {
       const c = new THREE.Color(o.color),
         n = g.getAttribute('position').count;

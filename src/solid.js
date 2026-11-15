@@ -70,14 +70,24 @@ export function fromManifold(m) {
     tv = mesh.triVerts,
     np = mesh.numProp;
   const out = new Float32Array(tv.length * 3);
-  for (let i = 0; i < tv.length; i++) {
-    const v = tv[i] * np;
-    out[i * 3] = vp[v];
-    out[i * 3 + 1] = vp[v + 1];
-    out[i * 3 + 2] = vp[v + 2];
+  let n = 0;
+  for (let i = 0; i < tv.length; i += 3) {
+    for (let k = 0; k < 3; k++) {
+      const v = tv[i + k] * np;
+      out[n + k * 3] = vp[v];
+      out[n + k * 3 + 1] = vp[v + 1];
+      out[n + k * 3 + 2] = vp[v + 2];
+    }
+    // Dwa różne wierzchołki Manifold mogą mieć identyczne współrzędne po zapisie jako float32.
+    // Slicer scala wierzchołki po położeniu, więc taki trójkąt byłby zdegenerowany — pomijamy go
+    // (jego dwie pozostałe krawędzie znoszą się nawzajem, siatka zostaje szczelna).
+    const eq = (a, b) =>
+      out[n + a] === out[n + b] && out[n + a + 1] === out[n + b + 1] && out[n + a + 2] === out[n + b + 2];
+    if (eq(0, 3) || eq(3, 6) || eq(0, 6)) continue;
+    n += 9;
   }
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(out, 3));
+  g.setAttribute('position', new THREE.BufferAttribute(out.slice(0, n), 3));
   g.computeVertexNormals();
   return g;
 }

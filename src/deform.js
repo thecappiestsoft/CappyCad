@@ -27,21 +27,16 @@ export function sliceGeometry(g, axis, planes) {
     }
     return [below, above];
   };
+  // Trójkąty o zerowym polu, ale z trzema różnymi wierzchołkami, zostają: ich krawędzie domykają
+  // sąsiadów (usunięcie zostawiłoby dziurę). Manifold sam je potem zwija. Pomijane są tylko
+  // trójkąty z powtórzonym wierzchołkiem.
+  const same = (p, q) => p[0] === q[0] && p[1] === q[1] && p[2] === q[2];
   const emit = poly => {
     for (let i = 1; i + 1 < poly.length; i++) {
       const a = poly[0],
         b = poly[i],
         c = poly[i + 1];
-      const ux = b[0] - a[0],
-        uy = b[1] - a[1],
-        uz = b[2] - a[2],
-        vx = c[0] - a[0],
-        vy = c[1] - a[1],
-        vz = c[2] - a[2];
-      const cx = uy * vz - uz * vy,
-        cy = uz * vx - ux * vz,
-        cz = ux * vy - uy * vx;
-      if (cx * cx + cy * cy + cz * cz < 1e-14) continue;
+      if (same(a, b) || same(b, c) || same(a, c)) continue;
       out.push(...a, ...b, ...c);
     }
   };
