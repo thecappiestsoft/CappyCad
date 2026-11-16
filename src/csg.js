@@ -9,7 +9,7 @@ export const ready = solid.ready;
 export const isSolidReady = solid.isReady;
 export const cleanForExport = g => (solid.isReady() ? solid.clean(g) : null);
 // tylko Manifold (bez zapasowego silnika) — rzuca wyjątek, gdy się nie da
-export const unionStrict = list => solid.union(list);
+export const unionStrict = list => solid.unionExport(list);
 
 const ev = new Evaluator();
 ev.attributes = ['position', 'normal'];
@@ -61,4 +61,14 @@ export function intersect(a, b) {
     () => solid.intersect(a, b),
     () => out(ev.evaluate(brush(a), brush(b), INTERSECTION)),
   );
+}
+// osobne części bryły (tylko Manifold); null, gdy siatka nie jest zamknięta
+export function decompose(g) {
+  if (!solid.isReady()) return null;
+  try {
+    return solid.decompose(g);
+  } catch (err) {
+    console.warn('Rozdzielanie części:', err.message);
+    return null;
+  }
 }

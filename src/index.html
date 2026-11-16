@@ -27,12 +27,16 @@
           <button id="miModel" data-icon="import"><div><b>Model 3D (STL, OBJ)…</b><small>Gotowy model z innego programu</small></div></button>
           <button id="miSvg" data-icon="star"><div><b>Grafika SVG jako bryła 3D…</b><small>Logo, ikona, rysunek wektorowy</small></div></button>
           <button id="miImage" data-icon="image"><div><b>Obraz jako szablon…</b><small>Rysunek lub zdjęcie do odrysowania</small></div></button>
+          <button id="miQr" data-icon="qr"><div><b>Kod QR…</b><small>Bryła z kodem QR z wpisanego tekstu lub adresu</small></div></button>
+          <button id="miQrImg" data-icon="qr"><div><b>Kod QR z obrazu…</b><small>Model 3D ze zdjęcia lub zrzutu ekranu kodu QR</small></div></button>
         </div>
       </div>
       <div class="menu-wrap">
         <button class="tb accent" data-icon="export" title="Eksport do druku 3D"><span>Eksport</span></button>
         <div class="menu right">
           <button id="meStl" data-icon="export"><div><b>STL — do druku 3D</b><small>Ctrl+E · zaznaczone lub wszystkie bryły</small></div></button>
+          <button id="me3mf" data-icon="export"><div><b>3MF — kolory i części</b><small>Osobne bryły z kolorami — druk wielokolorowy w slicerze</small></div></button>
+          <button id="meStlZip" data-icon="export"><div><b>STL — każda bryła osobno (ZIP)</b><small>Np. części po Auto-Split, każda w swoim pliku</small></div></button>
           <button id="meObj" data-icon="export"><div><b>OBJ — z kolorami</b><small>Do innych programów 3D i drukarek wielokolorowych</small></div></button>
           <button id="mePng" data-icon="image"><div><b>Obraz PNG widoku</b><small>Zrzut do prezentacji lub sprawozdania</small></div></button>
         </div>
@@ -68,6 +72,16 @@
       <button class="tb" id="bGroup" data-icon="group" title="Grupuj — łączy bryły i wycina otwory (Ctrl+G)"><span>Grupuj</span></button>
       <button class="tb" id="bUngroup" data-icon="ungroup" title="Rozgrupuj (Ctrl+Shift+G)"><span>Rozgrupuj</span></button>
       <button class="tb" id="bDrop" data-icon="drop" title="Połóż na płaszczyźnie (D)"><span>Połóż</span></button>
+      <div class="menu-wrap">
+        <button class="tb" id="bSplit" data-icon="split" title="Wycinanie kształtem i dzielenie modelu na części"><span>Podziel</span></button>
+        <div class="menu">
+          <button id="msShape" data-icon="split"><div><b>Podziel kształtem</b><small>Bryła + kształt tnący → część poza i część w kształcie (w jego kolorze)</small></div></button>
+          <button id="msCut" data-icon="cut"><div><b>Wytnij kształtem</b><small>Usuwa kształt tnący z bryły; każda bryła zostaje osobno</small></div></button>
+          <button id="msPlane" data-icon="split"><div><b>Podziel płaszczyzną…</b><small>Przetnij model na dwie części w osi X, Y lub Z</small></div></button>
+          <button id="msAuto" data-icon="grid"><div><b>Auto-Split…</b><small>Automatycznie podziel duży model na części mieszczące się w drukarce</small></div></button>
+          <button id="msParts" data-icon="ungroup"><div><b>Rozdziel na osobne bryły</b><small>Niepołączone fragmenty jako osobne obiekty</small></div></button>
+        </div>
+      </div>
     </div>
     <div class="sep"></div>
     <div class="seg" id="modeSeg">
@@ -81,6 +95,7 @@
     <div class="tb-group">
       <button class="tb toggle" id="bRuler" data-icon="ruler" title="Miarka — mierz odległości (L)"><span>Miarka</span></button>
       <button class="tb toggle" id="bSketch" data-icon="pen" title="Narysuj własny kształt (P)"><span>Rysuj</span></button>
+      <button class="tb toggle" id="bPaint" data-icon="brush" title="Pędzel — koloruj obiekty lub zakreślone obszary (B)"><span>Maluj</span></button>
     </div>
   </nav>
   <main>

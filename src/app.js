@@ -45,7 +45,11 @@ import {
   defaultParams,
   svgGeometry,
   svgFirstColor,
+  qrModules,
 } from './shapes.js';
+import { matrixSVG, gridFromImage } from './qr.js';
+import { build3MF } from './threemf.js';
+import polygonClipping from 'polygon-clipping';
 import { applyDeform, deformActive } from './deform.js';
 import { ICONS } from './icons.js';
 import { tr, setLang, startObserver, initialLang, lang } from './i18n.js';
@@ -867,7 +871,15 @@ function groupData(children) {
     name: tr('Grupa'),
     mirror: [1, 1, 1],
   };
-  d.size = geomFor(d).baseSize.toArray();
+  // wynik operacji jest już policzony — zapisujemy go w pamięci podręcznej zamiast liczyć drugi raz
+  const local = worldGeom.clone();
+  local.translate(-offset.x, -offset.y, -offset.z);
+  const geom = normalizeGeometry(local, [1, 1, 1], false);
+  const baseSize = V3();
+  geom.boundingBox.getSize(baseSize);
+  baseSize.max(V3(0.01, 0.01, 0.01));
+  geomCache.set(baseKey(d), { geom, baseSize });
+  d.size = baseSize.toArray();
   return d;
 }
 
@@ -1005,6 +1017,474 @@ function nudge(dx, dy, dz) {
   attachGizmo();
   updateInspectorValues();
   commitDebounced();
+}
+
+// ================================================================ dzielenie i wycinanie
+// Wyniki cięcia są zwykłymi grupami (bryła + bryły tnące jako otwory), więc pozostają edytowalne:
+// „Rozgrupuj” przywraca oryginał i kształt tnący. Część wspólna A∩B to A − (duży prostopadłościan − B).
+const isCuttable = o => !isImage(o) && !o.hole && !o.hidden;
+const MARGIN = 2;
+
+// zserializowany prostopadłościan od min do max (wektory świata)
+function boxData(min, max, extra = {}) {
+  return {
+    id: uid(),
+    type: 'box',
+    params: {},
+    mirror: [1, 1, 1],
+    quat: [0, 0, 0, 1],
+    pos: [(min.x + max.x) / 2, (min.y + max.y) / 2, min.z],
+    size: [max.x - min.x, max.y - min.y, max.z - min.z],
+    color: '#8f9ba8',
+    name: tr('Sześcian'),
+    hole: false,
+    ...extra,
+  };
+}
+const asHole = d => ({ ...structuredClone(d), id: uid(), hole: true });
+const asSolid = d => ({ ...structuredClone(d), id: uid(), hole: false });
+// grupa; null, gdy wynik jest pusty (kształt tnący nie dotyka bryły)
+function pieceOrNull(children, extra = {}) {
+  const d = groupData(children);
+  if (Math.max(...d.size) <= 0.02) return null;
+  return Object.assign(d, extra);
+}
+// część bryły t poza kształtami tnącymi
+function outsidePiece(t, cutters, extra) {
+  return pieceOrNull([asSolid(t), ...cutters.map(asHole)], extra);
+}
+// część bryły t wewnątrz kształtów tnących
+function insidePiece(t, cutters, tBox, extra) {
+  const big = tBox.clone().expandByScalar(MARGIN * 4);
+  const outer = groupData([boxData(big.min, big.max), ...cutters.map(asHole)]);
+  outer.hole = true;
+  return pieceOrNull([asSolid(t), outer], extra);
+}
+
+function busyRun(msg, fn) {
+  setBusy(true, msg);
+  setTimeout(() => {
+    try {
+      fn();
+    } catch (err) {
+      console.error(err);
+      toast((lang === 'en' ? 'The operation failed: ' : 'Operacja nie powiodła się: ') + err.message, true);
+    } finally {
+      setBusy(false);
+    }
+  }, 30);
+}
+
+// Zamienia obiekty „old” na nowe (zserializowane) i zaznacza nowe
+function replaceObjects(old, datas) {
+  setSelection([]);
+  old.forEach(removeObject);
+  const created = datas.map(d => createObject(d));
+  setSelection(created);
+  commit();
+  return created;
+}
+
+// kształt tnący: zaznaczone otwory, a gdy ich brak — ostatnio zaznaczony obiekt
+function pickCutters(list) {
+  const holes = list.filter(o => o.hole);
+  if (holes.length && holes.length < list.length) return holes;
+  return [list[list.length - 1]];
+}
+
+// mode: 'cut' — wytnij kształtem (zostaje bryła bez kształtu), 'split' — podziel na część poza i w kształcie
+function cutWithShape(mode = 'split') {
+  const list = selection.filter(o => !isImage(o));
+  const cutters = pickCutters(list);
+  const targets = list.filter(o => !cutters.includes(o) && isCuttable(o));
+  if (list.length < 2 || !targets.length) {
+    toast('Zaznacz bryłę i kształt tnący (Shift+klik). Kształt tnący to otwór albo ostatnio zaznaczony obiekt.', true);
+    return;
+  }
+  busyRun(mode === 'cut' ? 'Wycinanie kształtem…' : 'Dzielenie kształtem…', () => {
+    const cd = cutters.map(serialize);
+    const solidCutter = cutters.find(c => !c.hole);
+    const out = [];
+    const cutName = cutters.length === 1 ? cutters[0].name : tr('kształt');
+    for (const t of targets) {
+      const td = serialize(t);
+      const o1 = outsidePiece(td, cd, { name: t.name, color: t.color });
+      if (o1) out.push(o1);
+      if (mode === 'split') {
+        const o2 = insidePiece(td, cd, worldBox(t), {
+          name: `${t.name} — ${cutName}`,
+          color: solidCutter ? solidCutter.color : t.color,
+        });
+        if (o2) out.push(o2);
+      }
+    }
+    if (!out.length) {
+      toast('Kształt tnący nie dotyka bryły — nic nie zmieniono', true);
+      return;
+    }
+    replaceObjects([...targets, ...cutters], out);
+    toast(
+      mode === 'cut'
+        ? `Wycięto kształtem: ${cutName}`
+        : `Podzielono na części: ${out.length} (kształt tnący: ${cutName})`,
+    );
+  });
+}
+
+// Cięcie siatką płaszczyzn. cuts = { x: [..], y: [..], z: [..] } (położenia w mm, świat).
+// Zwraca zserializowane części z polem cell = [i, j, k].
+function gridPieces(o, cuts) {
+  const td = serialize(o);
+  const B = worldBox(o);
+  const big = B.clone().expandByScalar(MARGIN * 4);
+  const axes = ['x', 'y', 'z'];
+  const edges = axes.map(a => [big.min[a], ...cuts[a], big.max[a]]);
+  const pieces = [];
+  const n = edges.map(e => e.length - 1);
+  const total = n[0] * n[1] * n[2];
+  let no = 0;
+  for (let i = 0; i < n[0]; i++)
+    for (let j = 0; j < n[1]; j++)
+      for (let k = 0; k < n[2]; k++) {
+        const cell = [i, j, k];
+        const holes = [];
+        axes.forEach((a, ai) => {
+          const lo = edges[ai][cell[ai]],
+            hi = edges[ai][cell[ai] + 1];
+          if (cell[ai] > 0) {
+            const mn = big.min.clone(),
+              mx = big.max.clone();
+            mx[a] = lo;
+            holes.push(boxData(mn, mx, { hole: true }));
+          }
+          if (cell[ai] < n[ai] - 1) {
+            const mn = big.min.clone(),
+              mx = big.max.clone();
+            mn[a] = hi;
+            holes.push(boxData(mn, mx, { hole: true }));
+          }
+        });
+        no++;
+        const p = holes.length
+          ? pieceOrNull([asSolid(td), ...holes], {
+              name: `${o.name} — ${tr('część')} ${no}/${total}`,
+              color: o.color,
+            })
+          : null;
+        if (p) {
+          p.cell = cell;
+          pieces.push(p);
+        }
+      }
+  return pieces;
+}
+
+// rozsuwa części o „gap” mm wzdłuż osi podziału
+function explodePieces(pieces, n, gap) {
+  for (const p of pieces) for (let a = 0; a < 3; a++) p.pos[a] += (p.cell[a] - (n[a] - 1) / 2) * gap;
+}
+// układa części obok siebie na płaszczyźnie (rzędami), każda położona na Z = 0
+function layoutPieces(pieces, gap, center) {
+  const rowMax = Math.max(wp.x, Math.sqrt(pieces.reduce((s, p) => s + (p.size[0] + gap) * (p.size[1] + gap), 0)) * 1.4);
+  let x = 0,
+    y = 0,
+    rowH = 0,
+    maxW = 0;
+  const spots = [];
+  for (const p of pieces) {
+    const [w, d] = p.size;
+    if (x > 0 && x + w > rowMax) {
+      y += rowH + gap;
+      x = 0;
+      rowH = 0;
+    }
+    spots.push([x + w / 2, y + d / 2]);
+    x += w + gap;
+    rowH = Math.max(rowH, d);
+    maxW = Math.max(maxW, x - gap);
+  }
+  const totalH = y + rowH;
+  pieces.forEach((p, i) => {
+    p.pos = [r1(center.x - maxW / 2 + spots[i][0]), r1(center.y - totalH / 2 + spots[i][1]), 0];
+  });
+}
+const dropData = list => {
+  // pos grupy to środek podstawy, a obrót jest zerowy — położenie na płaszczyźnie to Z = 0
+  list.forEach(p => (p.pos[2] = 0));
+};
+
+function splitTargets() {
+  const list = selection.filter(isCuttable);
+  if (!list.length) toast('Zaznacz bryłę do podzielenia (otwory i szablony się nie dzielą)', true);
+  return list;
+}
+
+// --- podgląd płaszczyzn cięcia
+const cutPreview = new THREE.Group();
+cutPreview.renderOrder = 20;
+scene.add(cutPreview);
+const cutMat = new THREE.MeshBasicMaterial({
+  color: '#e8590c',
+  transparent: true,
+  opacity: 0.28,
+  side: THREE.DoubleSide,
+  depthWrite: false,
+});
+function showCutPlanes(box, cuts) {
+  clearCutPlanes();
+  if (!box) return;
+  const s = box.getSize(V3()),
+    c = box.getCenter(V3());
+  const m = MARGIN * 3;
+  for (const [a, vals] of Object.entries(cuts))
+    for (const v of vals) {
+      let g;
+      if (a === 'x') g = new THREE.PlaneGeometry(s.y + m, s.z + m).rotateY(Math.PI / 2).translate(v, c.y, c.z);
+      else if (a === 'y') g = new THREE.PlaneGeometry(s.x + m, s.z + m).rotateX(Math.PI / 2).translate(c.x, v, c.z);
+      else g = new THREE.PlaneGeometry(s.x + m, s.y + m).translate(c.x, c.y, v);
+      const mesh = new THREE.Mesh(g, cutMat);
+      mesh.renderOrder = 20;
+      const edge = new THREE.LineSegments(
+        new THREE.EdgesGeometry(g),
+        new THREE.LineBasicMaterial({ color: '#e8590c', depthTest: false, transparent: true }),
+      );
+      edge.renderOrder = 21;
+      cutPreview.add(mesh, edge);
+    }
+}
+function clearCutPlanes() {
+  for (const m of [...cutPreview.children]) {
+    cutPreview.remove(m);
+    m.geometry.dispose();
+    if (m.material !== cutMat) m.material.dispose();
+  }
+}
+
+// --- podział płaszczyzną
+function splitByPlaneDialog() {
+  const list = splitTargets();
+  if (!list.length) return;
+  const B = selectionBox(list, true);
+  let axis = 'z';
+  const mid = a => (B.min[a] + B.max[a]) / 2;
+  openModal(`<h2>Podziel płaszczyzną</h2>
+    <p>Bryła zostanie przecięta na dwie części. Pomarańczowa płaszczyzna pokazuje miejsce cięcia.</p>
+    <div class="pf wide"><span>Kierunek cięcia</span><div class="seg mini" id="spAxis">
+      <button data-ax="x">⟂ X (lewo / prawo)</button><button data-ax="y">⟂ Y (przód / tył)</button><button data-ax="z" class="on">⟂ Z (dół / góra)</button></div></div>
+    <div class="row2"><label class="pf"><span>Położenie płaszczyzny (mm)</span><input id="spPos" type="text" inputmode="decimal" value="${fmt(mid(axis))}"></label>
+    <label class="pf"><span>Odsuń części od siebie (mm)</span><input id="spGap" type="text" inputmode="decimal" value="5"></label></div>
+    <input id="spSlider" type="range" min="0" max="1000" value="500" class="wide-range">
+    <p class="note" id="spInfo"></p>
+    <div class="modal-btns"><button class="btn primary" id="spOk">Podziel</button><button class="btn" id="spCancel">Anuluj</button></div>`);
+  $('#modal').classList.add('see-through');
+  const upd = () => {
+    const v = parseNum($('#spPos').value);
+    const ok = isFinite(v) && v > B.min[axis] && v < B.max[axis];
+    $('#spInfo').textContent = ok
+      ? `${tr('Zakres')}: ${fmt(B.min[axis])} … ${fmt(B.max[axis])} mm`
+      : tr('Płaszczyzna musi przecinać bryłę');
+    $('#spOk').disabled = !ok;
+    showCutPlanes(B, ok ? { [axis]: [v] } : {});
+  };
+  const fromSlider = () => {
+    const k = +$('#spSlider').value / 1000;
+    $('#spPos').value = fmt(r1(B.min[axis] + (B.max[axis] - B.min[axis]) * k));
+    upd();
+  };
+  $$('#spAxis button').forEach(
+    b =>
+      (b.onclick = () => {
+        axis = b.dataset.ax;
+        $$('#spAxis button').forEach(x => x.classList.toggle('on', x === b));
+        $('#spSlider').value = 500;
+        fromSlider();
+      }),
+  );
+  $('#spSlider').oninput = fromSlider;
+  $('#spPos').oninput = upd;
+  const close = () => {
+    clearCutPlanes();
+    $('#modal').classList.remove('see-through');
+    closeModal();
+  };
+  $('#spCancel').onclick = close;
+  $('#spOk').onclick = () => {
+    const v = parseNum($('#spPos').value),
+      gap = Math.max(0, parseNum($('#spGap').value) || 0);
+    close();
+    splitByPlane(list, axis, v, gap);
+  };
+  upd();
+}
+function splitByPlane(list, axis, value, gap = 5) {
+  busyRun('Dzielenie płaszczyzną…', () => {
+    const out = [];
+    const n = [1, 1, 1];
+    n[{ x: 0, y: 1, z: 2 }[axis]] = 2;
+    for (const o of list) {
+      const cuts = { x: [], y: [], z: [] };
+      cuts[axis] = [value];
+      const pieces = gridPieces(o, cuts);
+      explodePieces(pieces, n, gap);
+      out.push(...pieces);
+    }
+    if (out.length <= list.length) {
+      toast('Płaszczyzna nie przecina bryły — nic nie zmieniono', true);
+      return;
+    }
+    out.forEach(p => delete p.cell);
+    replaceObjects(list, out);
+    toast(`Podzielono na części: ${out.length}`);
+  });
+}
+
+// --- Auto-Split: podział dużego modelu na części mieszczące się w drukarce
+let printerZ = 200;
+try {
+  printerZ = +localStorage.getItem('cappycad-printer-z') || 200;
+} catch {}
+function autoSplitPlan(B, vol, spare) {
+  const s = B.getSize(V3());
+  const lim = vol.map(v => Math.max(5, v - spare));
+  const n = ['x', 'y', 'z'].map((a, i) => Math.max(1, Math.ceil((s[a] - 1e-6) / lim[i])));
+  const cuts = {};
+  ['x', 'y', 'z'].forEach((a, i) => {
+    cuts[a] = [];
+    for (let k = 1; k < n[i]; k++) cuts[a].push(B.min[a] + (s[a] * k) / n[i]);
+  });
+  return { n, cuts, piece: ['x', 'y', 'z'].map((a, i) => s[a] / n[i]), size: s };
+}
+function autoSplitDialog() {
+  const list = splitTargets();
+  if (!list.length) return;
+  openModal(`<h2>Auto-Split — podział dużego modelu</h2>
+    <p>Model większy niż drukarka zostanie automatycznie podzielony na równe części, z których każda zmieści się na stole.</p>
+    <div class="row3"><label class="pf"><span>Drukarka X (mm)</span><input id="asX" type="number" min="20" max="2000" value="${wp.x}"></label>
+    <label class="pf"><span>Drukarka Y (mm)</span><input id="asY" type="number" min="20" max="2000" value="${wp.y}"></label>
+    <label class="pf"><span>Wysokość Z (mm)</span><input id="asZ" type="number" min="20" max="2000" value="${printerZ}"></label></div>
+    <div class="row2"><label class="pf"><span>Zapas od krawędzi stołu (mm)</span><input id="asSpare" type="number" min="0" max="100" value="10"></label>
+    <label class="pf"><span>Odstęp między częściami (mm)</span><input id="asGap" type="number" min="0" max="100" value="5"></label></div>
+    <label class="check"><input type="checkbox" id="asLay" checked> Rozłóż części obok siebie na płaszczyźnie (płaską stroną cięcia w dół)</label>
+    <p class="note" id="asInfo"></p>
+    <div class="modal-btns"><button class="btn primary" id="asOk">Podziel</button><button class="btn" id="asCancel">Anuluj</button></div>`);
+  $('#modal').classList.add('see-through');
+  const read = () => ({
+    vol: [+$('#asX').value, +$('#asY').value, +$('#asZ').value].map(v => Math.max(20, v || 200)),
+    spare: Math.max(0, +$('#asSpare').value || 0),
+    gap: Math.max(0, +$('#asGap').value || 0),
+    lay: $('#asLay').checked,
+  });
+  const upd = () => {
+    const { vol, spare } = read();
+    let total = 0,
+      lines = [];
+    const planes = { x: [], y: [], z: [] };
+    for (const o of list) {
+      const B = worldBox(o);
+      const p = autoSplitPlan(B, vol, spare);
+      const cnt = p.n[0] * p.n[1] * p.n[2];
+      total += cnt;
+      if (list.length === 1) showCutPlanes(B, p.cuts);
+      lines.push(
+        `${o.name}: ${fmt(p.size.x)} × ${fmt(p.size.y)} × ${fmt(p.size.z)} mm → ` +
+          (cnt > 1
+            ? `${p.n.join(' × ')} = ${cnt} ${tr('części')} (${tr('każda do')} ${p.piece.map(v => fmt(v)).join(' × ')} mm)`
+            : tr('mieści się w drukarce')),
+      );
+      Object.keys(planes).forEach(a => planes[a].push(...p.cuts[a]));
+    }
+    if (list.length > 1) showCutPlanes(selectionBox(list, true), planes);
+    $('#asInfo').innerHTML = lines.map(esc).join('<br>');
+    $('#asOk').disabled = total <= list.length;
+  };
+  $$('#modalBody input').forEach(i => (i.oninput = upd));
+  const close = () => {
+    clearCutPlanes();
+    $('#modal').classList.remove('see-through');
+    closeModal();
+  };
+  $('#asCancel').onclick = close;
+  $('#asOk').onclick = () => {
+    const opt = read();
+    printerZ = opt.vol[2];
+    try {
+      localStorage.setItem('cappycad-printer-z', String(printerZ));
+    } catch {}
+    close();
+    autoSplit(list, opt);
+  };
+  upd();
+}
+function autoSplit(list, { vol, spare = 10, gap = 5, lay = true }) {
+  busyRun('Auto-Split — dzielenie modelu…', () => {
+    const out = [];
+    let split = 0;
+    for (const o of list) {
+      const B = worldBox(o);
+      const p = autoSplitPlan(B, vol, spare);
+      if (p.n[0] * p.n[1] * p.n[2] < 2) {
+        out.push(serialize(o));
+        continue;
+      }
+      const pieces = gridPieces(o, p.cuts);
+      split++;
+      if (lay) {
+        dropData(pieces);
+        layoutPieces(pieces, Math.max(gap, 1), B.getCenter(V3()));
+      } else explodePieces(pieces, p.n, gap);
+      pieces.forEach(x => delete x.cell);
+      out.push(...pieces);
+    }
+    if (!split) {
+      toast('Model mieści się w drukarce — nie trzeba go dzielić');
+      return;
+    }
+    replaceObjects(list, out);
+    fitView();
+    toast(`Auto-Split: ${out.length} ${tr('części')} — każda zmieści się w drukarce`);
+  });
+}
+
+// --- rozdzielanie na osobne bryły (np. po cięciu lub z zaimportowanego modelu)
+function meshDataFromWorld(g, color, name) {
+  g.computeBoundingBox();
+  const b = g.boundingBox;
+  const c = V3((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, b.min.z);
+  const local = g.clone();
+  local.translate(-c.x, -c.y, -c.z);
+  const key = 'm' + uid();
+  dataStore.set(key, f32ToB64(new Float32Array(local.getAttribute('position').array)));
+  const s = b.getSize(V3());
+  return {
+    id: uid(),
+    type: 'mesh',
+    dataKey: key,
+    name,
+    color,
+    pos: c.toArray(),
+    quat: [0, 0, 0, 1],
+    size: [Math.max(0.01, s.x), Math.max(0.01, s.y), Math.max(0.01, s.z)],
+  };
+}
+function separateParts() {
+  const list = splitTargets();
+  if (!list.length) return;
+  busyRun('Rozdzielanie części…', () => {
+    const out = [],
+      done = [];
+    for (const o of list) {
+      const parts = csg.decompose(worldGeometry(o));
+      if (!parts || parts.length < 2) continue;
+      done.push(o);
+      parts.forEach((g, i) => out.push(meshDataFromWorld(g, o.color, `${o.name} — ${tr('część')} ${i + 1}`)));
+    }
+    if (!done.length) {
+      toast('To jest jedna, spójna bryła — nie ma czego rozdzielać');
+      return;
+    }
+    replaceObjects(done, out);
+    toast(`Rozdzielono na osobne bryły: ${out.length}`);
+  });
 }
 
 // ================================================================ historia
@@ -1505,6 +1985,227 @@ async function exportModel(fmtName) {
       (holes ? ' — pojedyncze otwory pominięto; zgrupuj je z bryłą, aby wyciąć' : ''),
   );
 }
+// 3MF: osobne bryły z kolorami i nazwami (druk wielokolorowy, wiele części w jednym pliku)
+async function export3MF() {
+  const list = exportList();
+  if (!list.length) {
+    toast('Brak brył do eksportu (otwory i szablony nie są eksportowane)', true);
+    return;
+  }
+  setBusy(true, lang === 'en' ? 'Preparing the 3MF file…' : 'Przygotowanie pliku 3MF…');
+  await new Promise(r => setTimeout(r, 30));
+  let bytes, count;
+  try {
+    const res = build3MF(
+      list.map(o => ({ name: o.name, color: o.color, positions: worldGeometry(o).getAttribute('position').array })),
+      { title: projectName(), app: APP },
+    );
+    count = res.count;
+    bytes = new Uint8Array(await res.blob.arrayBuffer());
+  } finally {
+    setBusy(false);
+  }
+  const base = safeFileName(projectName()) + (selection.length ? '_zaznaczenie' : '');
+  const r = await saveFile(base + '.3mf', [{ name: 'Model 3MF (kolory i części)', extensions: ['3mf'] }], bytes);
+  if (!r) return;
+  exEvent('exported');
+  const colors = new Set(list.map(o => o.color.toLowerCase())).size;
+  toast(
+    `Wyeksportowano 3MF (${count} ${count === 1 ? 'obiekt' : 'obiekty'}, ${colors} ${colors === 1 ? 'kolor' : 'kolory'})` +
+      (r.zipped ? ` — ${lang === 'en' ? 'unzip' : 'rozpakuj'} ${r.name}` : ''),
+  );
+  exportSizeHint(list);
+}
+// STL: każda bryła w osobnym pliku, wszystkie w jednym archiwum ZIP (np. części po Auto-Split)
+async function exportSTLParts() {
+  const list = exportList();
+  if (!list.length) {
+    toast('Brak brył do eksportu (otwory i szablony nie są eksportowane)', true);
+    return;
+  }
+  setBusy(true, lang === 'en' ? 'Preparing watertight meshes…' : 'Przygotowanie szczelnych siatek…');
+  await new Promise(r => setTimeout(r, 30));
+  let bytes;
+  try {
+    const used = new Set();
+    const files = list.map((o, i) => {
+      let n = asciiName(o.name).replace(/\.+$/, '') || 'czesc';
+      if (used.has(n)) n += '_' + (i + 1);
+      used.add(n);
+      const dv = new STLExporter().parse(exportSolid([o]), { binary: true });
+      return {
+        name: `${String(i + 1).padStart(2, '0')}_${n}.stl`,
+        data: new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength),
+      };
+    });
+    bytes = new Uint8Array(await makeZip(files).arrayBuffer());
+  } finally {
+    setBusy(false);
+  }
+  const r = await saveFile(
+    safeFileName(projectName()) + '_czesci.zip',
+    [{ name: 'Archiwum ZIP z plikami STL', extensions: ['zip'] }],
+    bytes,
+  );
+  if (!r) return;
+  exEvent('exported');
+  toast(`Wyeksportowano ${list.length} ${list.length === 1 ? 'plik' : 'pliki'} STL w archiwum ZIP`);
+}
+// podpowiedź: model nie mieści się na stole drukarki
+function exportSizeHint(list) {
+  const s = selectionBox(list, true).getSize(V3());
+  if (s.x > wp.x || s.y > wp.y || s.z > printerZ)
+    setTimeout(
+      () =>
+        toast(
+          lang === 'en'
+            ? 'The model is larger than the print bed — use Split › Auto-Split to divide it into printable parts.'
+            : 'Model jest większy niż stół drukarki — użyj Podziel › Auto-Split, aby podzielić go na części.',
+        ),
+      3300,
+    );
+}
+
+// --- kod QR
+function insertQRDialog() {
+  openModal(`<h2>Kod QR</h2>
+    <p>Wpisz tekst lub adres strony. Powstanie bryła z kodem QR, którą można wydrukować i zeskanować telefonem.</p>
+    <label class="pf wide"><span>Treść</span><textarea id="qrText" rows="3" maxlength="1500">https://www.cappysoft.pl</textarea></label>
+    <div class="row2"><label class="pf"><span>Rodzaj</span><select id="qrStyle">${SHAPES.qr.params.style.options.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label>
+    <label class="pf"><span>Szerokość kodu (mm)</span><input id="qrWidth" type="number" min="10" max="400" value="50"></label></div>
+    <p class="note" id="qrInfo"></p>
+    <div class="modal-btns"><button class="btn primary" id="qrOk">Wstaw</button><button class="btn" id="qrSvg">Zapisz jako obraz SVG</button><button class="btn" id="qrCancel">Anuluj</button></div>`);
+  const upd = () => {
+    try {
+      const q = qrModules({ text: $('#qrText').value, ecl: 'M' });
+      const w = Math.max(10, +$('#qrWidth').value || 50);
+      const m = w / (q.size + 4);
+      $('#qrInfo').textContent =
+        `${tr('Kod')} ${q.size} × ${q.size} ${tr('modułów')}, ${tr('moduł')} ${fmt(m)} mm` +
+        (m < 0.8 ? ' — ' + tr('za mały do druku, zwiększ szerokość lub skróć tekst') : '');
+      $('#qrOk').disabled = false;
+    } catch (err) {
+      $('#qrInfo').textContent = err.message;
+      $('#qrOk').disabled = true;
+    }
+  };
+  $('#qrText').oninput = upd;
+  $('#qrWidth').oninput = upd;
+  $('#qrCancel').onclick = closeModal;
+  $('#qrSvg').onclick = () => {
+    const t = $('#qrText').value;
+    closeModal();
+    saveQRImage({ text: t, ecl: 'M' });
+  };
+  $('#qrOk').onclick = () => {
+    const text = $('#qrText').value,
+      style = $('#qrStyle').value;
+    const w = Math.max(10, +$('#qrWidth').value || 50);
+    const q = qrModules({ text, ecl: 'M' });
+    const module = Math.max(0.4, Math.round((w / (q.size + 4)) * 100) / 100);
+    closeModal();
+    addShape('qr', null, { params: { text, style, module } });
+    fitView();
+  };
+  upd();
+  $('#qrText').focus();
+  $('#qrText').select();
+}
+async function saveQRImage(params) {
+  let svg;
+  try {
+    svg = matrixSVG(qrModules(params));
+  } catch (err) {
+    toast(err.message, true);
+    return;
+  }
+  const r = await saveFile(safeFileName(tr('kod-qr')) + '.svg', [{ name: 'Obraz SVG', extensions: ['svg'] }], svg);
+  if (r) toast('Zapisano kod QR jako obraz SVG');
+}
+// kod QR z obrazu (zrzut ekranu, wygenerowany plik) -> bryła
+async function importQRImage() {
+  const exts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'];
+  const f = await pickFile(
+    [{ name: 'Obraz z kodem QR (PNG, JPG…)', extensions: exts }],
+    true,
+    exts.map(e => '.' + e).join(','),
+  );
+  if (!f) return;
+  const ext = (f.name.split('.').pop() || 'png').toLowerCase();
+  const img = new Image();
+  img.onload = () => {
+    try {
+      // duże zdjęcia zmniejszamy — wystarczy kilka pikseli na moduł
+      const k = Math.min(1, 1200 / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.max(1, Math.round(img.naturalWidth * k)),
+        h = Math.max(1, Math.round(img.naturalHeight * k));
+      const cv = document.createElement('canvas');
+      cv.width = w;
+      cv.height = h;
+      const ctx = cv.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0, w, h);
+      const grid = gridFromImage(ctx.getImageData(0, 0, w, h).data, w, h);
+      const n = grid.split('/').length;
+      const o = addShape('qr', null, {
+        params: { text: tr('(kod odczytany z obrazu)'), grid, module: Math.round((50 / (n + 4)) * 100) / 100 },
+      });
+      if (o) {
+        o.name = f.name.replace(/\.[^.]+$/, '') + ' — QR';
+        renderInspector();
+        commit();
+      }
+      fitView();
+      toast(`Utworzono bryłę z kodu QR (${n} × ${n} modułów). Sprawdź telefonem przed drukiem.`);
+    } catch (err) {
+      toast(
+        tr(err.message) +
+          ' — ' +
+          tr('użyj wyraźnego obrazu z prosto ustawionym kodem albo wpisz treść w „Wstaw › Kod QR”'),
+        true,
+      );
+    }
+  };
+  img.onerror = () => toast('Nie udało się odczytać obrazu', true);
+  img.src = `data:${MIME[ext] || 'image/png'};base64,${bytesToB64(f.data)}`;
+}
+// kod QR -> dwie bryły: płytka i moduły (różne kolory, do druku wielokolorowego)
+function splitQRColors(o) {
+  if (o.type !== 'qr') return;
+  const p = o.params,
+    def = SHAPES.qr.params;
+  const base = Number(p.base ?? def.base.def),
+    relief = Number(p.relief ?? def.relief.def);
+  const q = qrModules(p);
+  const border = Math.round(Number(p.border ?? def.border.def));
+  const m = Number(p.module ?? def.module.def);
+  const full = (q.size + border * 2) * m;
+  const sz = sizeOf(o);
+  const k = sz.x / Math.max(0.01, full); // obiekt mógł zostać przeskalowany
+  const pos = o.mesh.position.clone(),
+    quat = o.mesh.quaternion.toArray();
+  const style = p.style || 'plate';
+  // wysokość obiektu mogła zostać zmieniona — przeliczamy ją proporcjonalnie
+  const kz = style === 'plate' ? sz.z / (base + relief) : style === 'engraved' ? sz.z / base : sz.z / relief;
+  const plate = {
+    type: 'box',
+    params: {},
+    name: o.name + ' — ' + tr('płytka'),
+    color: '#f8f9fa',
+    pos: pos.toArray(),
+    quat,
+    size: [full * k, full * k, base * kz],
+  };
+  const mods = { ...serialize(o), id: uid(), params: { ...p, style: 'modules' }, color: '#212529' };
+  mods.name = o.name + ' — ' + tr('moduły');
+  const { baseSize } = geomFor(mods);
+  mods.size = [baseSize.x * k, baseSize.y * k, relief * kz];
+  // moduły leżą na płytce (wzorce pozycjonujące w narożnikach — obwiednia modułów = cały kod)
+  const up = V3(0, 0, plate.size[2]).applyQuaternion(o.mesh.quaternion);
+  mods.pos = pos.clone().add(up).toArray();
+  replaceObjects([o], [plate, mods]);
+  toast('Kod rozdzielony na płytkę i moduły — każdą część możesz wydrukować innym kolorem (eksport 3MF)');
+}
+
 async function exportPNG() {
   const hidden = [tc.getHelper(), handleGroup, rulerGroup, sketchGroup, ...selHelpers.values()].map(o => [
     o,
@@ -1976,6 +2677,212 @@ function finishSketch() {
   }
 }
 
+// ================================================================ narzędzia: pędzel (kolorowanie)
+// Tryb „obiekt”: klik lub przeciągnięcie po obiektach maluje je wybranym kolorem.
+// Tryb „obszar”: obrysowany odręcznie fragment widoku (jak szkic) staje się osobną częścią bryły
+// w wybranym kolorze — część jest wycinana na wylot w kierunku patrzenia (do druku wielokolorowego / 3MF).
+let brushColor = '#e5484d',
+  brushMode = 'object',
+  painting = null; // { changed, pts: [[x, y]] }
+const lassoSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+lassoSvg.id = 'lasso';
+lassoSvg.innerHTML = '<polygon points=""></polygon>';
+viewport.appendChild(lassoSvg);
+
+function paintObjectAt(e) {
+  const hit = pick(e);
+  const o = hit?.object.userData.obj;
+  if (!o || isImage(o)) return;
+  if (o.hole) {
+    if (!painting.warned) toast('Otwory nie mają koloru — zmień je w bryłę (H), aby pomalować');
+    painting.warned = true;
+    return;
+  }
+  if (o.color.toLowerCase() === brushColor.toLowerCase()) return;
+  setColor(o, brushColor);
+  painting.changed = true;
+}
+function lassoScreen(e) {
+  const r = viewport.getBoundingClientRect();
+  return [e.clientX - r.left, e.clientY - r.top];
+}
+function drawLasso() {
+  lassoSvg.firstChild.setAttribute('points', painting ? painting.pts.map(p => p.join(',')).join(' ') : '');
+  lassoSvg.style.setProperty('--c', brushColor);
+  lassoSvg.classList.toggle('show', !!painting && brushMode === 'region');
+}
+function paintDown(e) {
+  painting = { changed: false, pts: [lassoScreen(e)] };
+  canvas.setPointerCapture(e.pointerId);
+  if (brushMode === 'object') paintObjectAt(e);
+  drawLasso();
+}
+function paintMove(e) {
+  if (!painting) {
+    const hit = pick(e);
+    setHover(hit && !isImage(hit.object.userData.obj) ? hit.object.userData.obj : null);
+    return;
+  }
+  if (brushMode === 'object') paintObjectAt(e);
+  else {
+    const p = lassoScreen(e),
+      q = painting.pts[painting.pts.length - 1];
+    if (Math.hypot(p[0] - q[0], p[1] - q[1]) > 3) painting.pts.push(p);
+    drawLasso();
+  }
+}
+function paintUp() {
+  if (!painting) return;
+  const st = painting;
+  painting = null;
+  drawLasso();
+  if (brushMode === 'object') {
+    if (st.changed) {
+      if (selection.length) renderInspector();
+      commit();
+    }
+    return;
+  }
+  paintRegion(st.pts);
+}
+
+// odręczny obrys (piksele widoku) -> wielokąty w układzie NDC (bez samoprzecięć)
+function lassoPolygons(pts) {
+  const r = viewport.getBoundingClientRect();
+  if (pts.length < 3) return [];
+  const ring = pts.map(([x, y]) => [(x / r.width) * 2 - 1, -(y / r.height) * 2 + 1]);
+  ring.push(ring[0]);
+  try {
+    // suma z samym sobą rozplątuje pętle i samoprzecięcia
+    return polygonClipping.union([ring]);
+  } catch {
+    return [];
+  }
+}
+// Bryła „graniastosłupa widzenia”: obrys wyciągnięty od głębokości d0 do d1 wzdłuż promieni kamery
+function lassoPrism(polys, d0, d1) {
+  camera.updateMatrixWorld();
+  const fwd = camera.getWorldDirection(V3());
+  const ndcZ = d => camera.position.clone().addScaledVector(fwd, d).project(camera).z;
+  const z0 = ndcZ(d0),
+    z1 = ndcZ(d1);
+  const P = (x, y, z) => V3(x, y, z).unproject(camera);
+  const out = [];
+  const tri = (a, b, c) => out.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+  for (const poly of polys) {
+    const rings = poly.map(rg => rg.slice(0, -1).map(([x, y]) => new THREE.Vector2(x, y)));
+    if (rings[0].length < 3) continue;
+    // zewnętrzny obrys przeciwnie do ruchu wskazówek zegara, dziury zgodnie
+    rings.forEach((rg, i) => {
+      if (THREE.ShapeUtils.isClockWise(rg) !== i > 0) rg.reverse();
+    });
+    const near = rings.map(rg => rg.map(v => P(v.x, v.y, z0)));
+    const far = rings.map(rg => rg.map(v => P(v.x, v.y, z1)));
+    // ściany boczne
+    rings.forEach((rg, ri) => {
+      for (let i = 0; i < rg.length; i++) {
+        const j = (i + 1) % rg.length;
+        tri(far[ri][i], far[ri][j], near[ri][j]);
+        tri(far[ri][i], near[ri][j], near[ri][i]);
+      }
+    });
+    // podstawy (bliska i daleka)
+    const flat = rings.flat(),
+      nearF = near.flat(),
+      farF = far.flat();
+    const faces = THREE.ShapeUtils.triangulateShape(rings[0], rings.slice(1));
+    for (let [a, b, c] of faces) {
+      const A = flat[a],
+        B = flat[b],
+        C = flat[c];
+      if ((B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x) < 0) [b, c] = [c, b];
+      tri(nearF[a], nearF[b], nearF[c]);
+      tri(farF[a], farF[c], farF[b]);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
+  return g;
+}
+function paintRegion(pts) {
+  const polys = lassoPolygons(pts);
+  const r = viewport.getBoundingClientRect();
+  const area = polys.reduce(
+    (s, p) => s + Math.abs(THREE.ShapeUtils.area(p[0].map(([x, y]) => new THREE.Vector2(x, y)))),
+    0,
+  );
+  if (!polys.length || area * r.width * r.height * 0.25 < 30) {
+    toast('Obrysuj obszar do pomalowania — przytrzymaj lewy przycisk i zakreśl kształt');
+    return;
+  }
+  // obrys w pikselach widoku (do wstępnego wyboru obiektów)
+  const xs = pts.map(p => p[0] + r.left),
+    ys = pts.map(p => p[1] + r.top);
+  const lx0 = Math.min(...xs),
+    lx1 = Math.max(...xs),
+    ly0 = Math.min(...ys),
+    ly1 = Math.max(...ys);
+  const pool = (selection.length ? selection : objects).filter(isCuttable).filter(o => !o.locked);
+  const cands = pool.filter(o => {
+    const b = worldBox(o, false);
+    let x0 = Infinity,
+      x1 = -Infinity,
+      y0 = Infinity,
+      y1 = -Infinity;
+    for (let i = 0; i < 8; i++) {
+      const s = toScreen(V3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z));
+      x0 = Math.min(x0, s.x);
+      x1 = Math.max(x1, s.x);
+      y0 = Math.min(y0, s.y);
+      y1 = Math.max(y1, s.y);
+    }
+    return x1 >= lx0 && x0 <= lx1 && y1 >= ly0 && y0 <= ly1;
+  });
+  if (!cands.length) {
+    toast('Obrys nie obejmuje żadnej bryły', true);
+    return;
+  }
+  busyRun('Kolorowanie obszaru…', () => {
+    const sph = selectionBox(cands, false).getBoundingSphere(new THREE.Sphere());
+    const fwd = camera.getWorldDirection(V3());
+    const dc = sph.center.clone().sub(camera.position).dot(fwd);
+    const d0 = Math.max(camera.near * 2, dc - sph.radius - 2),
+      d1 = dc + sph.radius + 2;
+    // kształt „pędzla” jako bryła siatkowa w świecie
+    const cutter = meshDataFromWorld(lassoPrism(polys, d0, d1), brushColor, tr('Obszar koloru'));
+    cutter.hole = true;
+    const old = [],
+      out = [];
+    let recolored = 0;
+    for (const t of cands) {
+      const td = serialize(t);
+      const inside = insidePiece(td, [cutter], worldBox(t), { name: `${t.name} — ${tr('kolor')}`, color: brushColor });
+      if (!inside) continue;
+      const outside = outsidePiece(td, [cutter], { name: t.name, color: t.color });
+      if (!outside) {
+        setColor(t, brushColor);
+        recolored++;
+        continue;
+      }
+      old.push(t);
+      out.push(outside, inside);
+    }
+    if (!old.length && !recolored) {
+      toast('Obrys nie obejmuje żadnej bryły', true);
+      return;
+    }
+    if (old.length) {
+      replaceObjects(old, out);
+      setSelection([]); // kolejny obrys może objąć dowolne bryły
+    } else commit();
+    toast('Pomalowano obszar — powstała osobna część w nowym kolorze (eksport 3MF zachowa kolory)');
+  });
+}
+function setBrushColor(c) {
+  brushColor = c;
+  updateBanner();
+}
+
 function setTool(t) {
   if (tool === 'sketch' && t !== 'sketch') {
     sk = null;
@@ -1989,12 +2896,20 @@ function setTool(t) {
     rStart = null;
     hoverMarker.visible = false;
   }
+  if (tool === 'paint' && t !== 'paint') {
+    painting = null;
+    drawLasso();
+    setHover(null);
+  }
   tool = t;
   if (t === 'ruler') capy?.say('ruler');
   if (t === 'sketch') capy?.say('sketch');
+  if (t === 'paint' && selection.length === 1 && !selection[0].hole && !isImage(selection[0]))
+    brushColor = selection[0].color;
   $('#bRuler').classList.toggle('on', t === 'ruler');
   $('#bSketch').classList.toggle('on', t === 'sketch');
-  canvas.style.cursor = t === 'select' ? 'default' : 'crosshair';
+  $('#bPaint').classList.toggle('on', t === 'paint');
+  canvas.style.cursor = t === 'select' ? 'default' : t === 'paint' ? 'cell' : 'crosshair';
   sketchGroup.visible = t === 'sketch';
   attachGizmo();
   updateBanner();
@@ -2010,6 +2925,14 @@ function updateBanner() {
     b.innerHTML = `<b>Rysuj kształt</b> — klikaj kolejne punkty (${n}). Zamknij klikając pierwszy punkt, dwuklikiem lub <kbd>Enter</kbd>. <kbd>Backspace</kbd> — cofnij punkt.
       <button class="btn sm primary" id="tbFinish" ${n < 3 ? 'disabled' : ''}>Utwórz bryłę</button><button class="btn sm" id="tbDone">Anuluj</button>`;
     $('#tbFinish').onclick = finishSketch;
+  } else if (tool === 'paint') {
+    b.innerHTML = `<b>Pędzel</b> <span class="seg mini" id="tbBrushMode"><button data-bm="object" class="${brushMode === 'object' ? 'on' : ''}" title="Kliknij lub przeciągnij po obiektach">Cały obiekt</button><button data-bm="region" class="${brushMode === 'region' ? 'on' : ''}" title="Zakreśl obszar — stanie się osobną częścią w tym kolorze">Obszar (szkic)</button></span>
+      <span class="tb-sw">${SWATCHES.map(c => `<button class="sw ${c === brushColor ? 'on' : ''}" style="--c:${c}" data-bc="${c}" title="${c}"></button>`).join('')}<label class="sw custom" title="Własny kolor"><input type="color" id="tbBrushPick" value="${brushColor}"></label></span>
+      <small>${brushMode === 'object' ? 'Kliknij lub przeciągnij po bryłach.' : 'Zakreśl obszar na bryle — zostanie wycięty na wylot w kierunku patrzenia.'}</small>
+      <button class="btn sm" id="tbDone">Zakończ</button>`;
+    $$('#tbBrushMode button').forEach(x => (x.onclick = () => ((brushMode = x.dataset.bm), updateBanner())));
+    $$('[data-bc]').forEach(x => (x.onclick = () => setBrushColor(x.dataset.bc)));
+    $('#tbBrushPick').onchange = e => setBrushColor(e.target.value);
   } else {
     b.classList.remove('show');
     return;
@@ -2032,6 +2955,10 @@ canvas.addEventListener('pointerdown', e => {
   }
   if (tool === 'sketch') {
     sketchClick(e);
+    return;
+  }
+  if (tool === 'paint') {
+    paintDown(e);
     return;
   }
   if (tc.dragging || tc.axis) return;
@@ -2077,6 +3004,10 @@ canvas.addEventListener('pointermove', e => {
   }
   if (tool === 'sketch') {
     updateSketchVisual(sketchPoint(e));
+    return;
+  }
+  if (tool === 'paint') {
+    paintMove(e);
     return;
   }
   if (drag) {
@@ -2138,6 +3069,10 @@ canvas.addEventListener('pointerup', e => {
     return;
   }
   if (e.pointerType === 'touch') orbit.enabled = true;
+  if (tool === 'paint') {
+    paintUp();
+    return;
+  }
   if (drag) {
     const moved = drag.moved;
     drag = null;
@@ -2214,6 +3149,10 @@ window.addEventListener('keydown', e => {
       sk.pts.pop();
       updateSketchVisual(null);
     }
+    return;
+  }
+  if (tool === 'paint' && e.key === 'Escape') {
+    setTool('select');
     return;
   }
   if (tool === 'ruler' && e.key === 'Escape') {
@@ -2294,6 +3233,7 @@ window.addEventListener('keydown', e => {
   else if (k === 'q') setGizmoMode('none');
   else if (k === 'l') setTool('ruler');
   else if (k === 'p') setTool('sketch');
+  else if (k === 'b') setTool(tool === 'paint' ? 'select' : 'paint');
   else if (k === 'f') fitView();
   else if (k === 'i' && selection.length) setInspCollapsed(!inspCollapsed);
   else if (k === 't') setTheme(effectiveTheme() === 'dark' ? 'light' : 'dark');
@@ -2444,6 +3384,9 @@ function renderInspector() {
     }
     if (o.type === 'group')
       h += `<p class="note">Grupa z ${o.children.length} elementów. Rozgrupuj (Ctrl+Shift+G), aby edytować części.</p>`;
+    if (o.type === 'qr')
+      h += `<div class="row2"><button class="btn" id="qrSaveImg">${ICONS.image}Zapisz kod jako SVG</button><button class="btn" id="qrColors">${ICONS.split}Płytka + kod (2 kolory)</button></div>
+        ${o.params.grid ? '<p class="note">Kod odczytany z obrazu. Wpisz nową treść, aby wygenerować go od nowa.</p>' : ''}`;
     if (!img) {
       const d = o.deform || {};
       h += `<details class="deform" ${deformActive(o.deform) ? 'open' : ''}><summary>Wyginanie i deformacje</summary>
@@ -2460,7 +3403,14 @@ function renderInspector() {
         <span>Y</span><button data-al="y|min" title="Do przodu">⬓</button><button data-al="y|mid" title="Środek Y">◫</button><button data-al="y|max" title="Do tyłu">⬒</button>
         <span>Z</span><button data-al="z|min" title="Do dołu">▁</button><button data-al="z|mid" title="Środek Z">▬</button><button data-al="z|max" title="Do góry">▔</button>
       </div>
-      <button class="btn primary block" id="inspGroup">${ICONS.group}Grupuj (Ctrl+G)</button>`;
+      <button class="btn primary block" id="inspGroup">${ICONS.group}Grupuj (Ctrl+G)</button>
+      <div class="row2"><button class="btn" id="inspCutShape" title="Kształt tnący: zaznaczony otwór lub ostatnio zaznaczony obiekt">${ICONS.split}Podziel kształtem</button><button class="btn" id="inspCutOut" title="Wycina kształt z bryły — bryła zostaje osobnym obiektem">${ICONS.cut}Wytnij kształtem</button></div>`;
+  }
+  if (!img && selection.some(isCuttable)) {
+    h += `<h4>Podziel</h4><div class="row3 split-row">
+      <button class="btn" id="inspPlane" title="Przetnij płaszczyzną na dwie części">${ICONS.split}Płaszczyzną</button>
+      <button class="btn" id="inspAuto" title="Podziel automatycznie na części mieszczące się w drukarce">${ICONS.grid}Auto-Split</button>
+      <button class="btn" id="inspParts" title="Rozdziel niepołączone fragmenty na osobne obiekty">${ICONS.ungroup}Na bryły</button></div>`;
   }
   if (!img) {
     h += `<h4>Odbij lustrzanie</h4><div class="row3 mirror-row">
@@ -2518,6 +3468,13 @@ function renderInspector() {
       }),
   );
   $('#inspGroup')?.addEventListener('click', groupSelection);
+  $('#inspCutShape')?.addEventListener('click', () => cutWithShape('split'));
+  $('#inspCutOut')?.addEventListener('click', () => cutWithShape('cut'));
+  $('#inspPlane')?.addEventListener('click', splitByPlaneDialog);
+  $('#inspAuto')?.addEventListener('click', autoSplitDialog);
+  $('#inspParts')?.addEventListener('click', separateParts);
+  $('#qrSaveImg')?.addEventListener('click', () => saveQRImage(o.params));
+  $('#qrColors')?.addEventListener('click', () => splitQRColors(o));
   $('#inspLib')?.addEventListener('click', saveToLibrary);
   $('#inspDrop').onclick = () => {
     dropToPlane();
@@ -2563,6 +3520,7 @@ function renderInspector() {
         inp.value = v;
       } else if (!p.type) v = Number(v);
       o.params = { ...o.params, [key]: v };
+      if (o.type === 'qr' && key === 'text') delete o.params.grid; // nowa treść zastępuje kod z obrazu
       if (img && key === 'opacity') {
         o.mesh.material.opacity = v / 100;
         return;
@@ -2750,6 +3708,7 @@ const PALETTE = [
       'star',
       'heart',
       'text',
+      'qr',
     ].map(t => T(t)),
   },
   {
@@ -3438,6 +4397,13 @@ function updateToolbarState() {
     selection.some(o => o.type === 'group'),
   );
   set('bDrop', has);
+  const cut = selection.filter(o => !isImage(o));
+  set('msShape', cut.length > 1);
+  set('msCut', cut.length > 1);
+  const solids = selection.some(isCuttable);
+  set('msPlane', solids);
+  set('msAuto', solids);
+  set('msParts', solids);
 }
 function updateCount() {
   $('#objCount').textContent = `Obiekty: ${objects.filter(o => !isImage(o)).length}`;
@@ -3472,6 +4438,16 @@ function setupToolbar() {
   on('miImage', importImage);
   on('meStl', () => exportModel('stl'));
   on('meObj', () => exportModel('obj'));
+  on('me3mf', export3MF);
+  on('meStlZip', exportSTLParts);
+  on('miQr', insertQRDialog);
+  on('miQrImg', importQRImage);
+  on('msShape', () => cutWithShape('split'));
+  on('msCut', () => cutWithShape('cut'));
+  on('msPlane', splitByPlaneDialog);
+  on('msAuto', autoSplitDialog);
+  on('msParts', separateParts);
+  on('bPaint', () => setTool(tool === 'paint' ? 'select' : 'paint'));
   on('mePng', exportPNG);
   on('bHelp', showHelp);
   on('bLessons', () => showLessons());
@@ -3521,7 +4497,8 @@ function openModal(html) {
   $('#modal').classList.add('open');
 }
 function closeModal() {
-  $('#modal').classList.remove('open');
+  $('#modal').classList.remove('open', 'see-through');
+  clearCutPlanes();
 }
 $('#modal').addEventListener('mousedown', e => {
   if (e.target.id === 'modal') closeModal();
@@ -3784,6 +4761,26 @@ window.__cappycad = {
     return exportSolid(exportList()).children[0].geometry;
   },
   csg,
+  cutWithShape,
+  splitByPlane,
+  autoSplit,
+  separateParts,
+  paintRegion,
+  setBrush(c, mode) {
+    brushColor = c;
+    brushMode = mode;
+  },
+  build3MFBlob() {
+    return build3MF(
+      exportList().map(o => ({
+        name: o.name,
+        color: o.color,
+        positions: worldGeometry(o).getAttribute('position').array,
+      })),
+    ).blob;
+  },
+  splitQRColors,
+  qrModules,
   screenOf(o) {
     const s = toScreen(worldBox(o).getCenter(V3()));
     return [Math.round(s.x), Math.round(s.y)];
