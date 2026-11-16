@@ -32,7 +32,15 @@ PODSTAWY
   odbicie lustrzane, „Zapisz jako mój kształt”.
 - Dziury: ustaw obiekt jako „Otwór”, zaznacz go z bryłą i kliknij „Grupuj”.
 - Miarka (L), Rysuj własny kształt (P), Wstaw: model STL/OBJ, SVG jako bryła, obraz jako szablon.
-- Eksport: STL (druk 3D), OBJ (z kolorami), PNG.
+- Eksport: STL (druk 3D), 3MF (kolory i osobne części — druk wielokolorowy), STL każdej bryły
+  osobno (ZIP), OBJ (z kolorami), PNG.
+- Podziel: podział bryły kształtem (część poza i część w kształcie), wycięcie kształtem,
+  podział płaszczyzną, rozdzielenie na osobne bryły oraz Auto-Split — automatyczny podział
+  modelu za dużego na drukarkę na części, które się na niej zmieszczą.
+- Pędzel (B): kolorowanie całych obiektów albo zakreślonego obszaru, który staje się osobną
+  częścią w wybranym kolorze (do druku wielokolorowego).
+- Kod QR: kształt w palecie, „Wstaw → Kod QR” (z tekstu lub adresu, także zapis jako obraz SVG)
+  i „Wstaw → Kod QR z obrazu” (model 3D ze zrzutu ekranu lub zdjęcia kodu).
 - Śruby, nakrętki, otwory gwintowane i gniazda nakrętek M2–M16 w wymiarach ISO.
 - Lekcje: 10 przykładowych projektów (brelok, domek, pudełko z pokrywką, śruba z nakrętką,
   podstawka pod telefon, bryły platońskie…) i 8 ćwiczeń krok po kroku z automatycznym odhaczaniem.

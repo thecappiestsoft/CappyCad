@@ -11,9 +11,13 @@ dlatego budowanie zachowuje komentarze licencyjne bibliotek na końcu kodu (`leg
 | three.js                  | grafika 3D, eksport/import STL i OBJ, SVG         | MIT            |
 | manifold-3d               | szczelne operacje logiczne na bryłach (WASM)      | Apache-2.0     |
 | three-bvh-csg, three-mesh-bvh | zapasowy silnik operacji na bryłach           | MIT            |
-| polygon-clipping          | operacje na wielokątach (kapibara z siatką)       | MIT            |
+| polygon-clipping          | operacje na wielokątach (kapibara, obrys pędzla)  | MIT            |
 | DejaVu Sans Bold          | czcionka kształtu „Tekst” (`src/data/font.json`)  | licencja Bitstream Vera / DejaVu (wolna) |
 | Electron                  | okno programu w wersjach desktopowych             | MIT            |
+
+Generator i czytnik kodów QR (`src/qr.js`) oraz zapis 3MF (`src/threemf.js`) są napisane od podstaw na podstawie
+norm (ISO/IEC 18004, specyfikacja 3MF Core) i nie korzystają z bibliotek zewnętrznych.
+„QR Code” jest zastrzeżonym znakiem towarowym DENSO WAVE INCORPORATED.
 
 Narzędzia budowania (nie trafiają do programu): esbuild (MIT), electron-builder (MIT), Prettier (MIT),
 opentype.js (MIT, tylko konwersja czcionki).

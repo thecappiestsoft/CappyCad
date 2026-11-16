@@ -14,7 +14,9 @@ function showHelpEN({ openModal, closeModal, $ }) {
       <li>Internal thread: insert a <b>Threaded hole</b> (Bolts &amp; nuts section) and group it with a solid.</li>
       <li>The <b>Ruler</b> measures the distance between two points, <b>Draw</b> turns a drawn outline into a solid.</li>
       <li>Insert a drawing to trace as a template: <b>Insert → Image as a template</b>. An SVG file can also become a 3D solid.</li>
-      <li>Export the finished model to <b>STL</b> or <b>OBJ</b> and open it in your 3D printer software.</li>
+      <li><b>Split</b>: select a solid and a cutting shape to split or cut it with that shape, cut it with a plane, or let <b>Auto-Split</b> divide a model that is too big for your printer.</li>
+      <li>The <b>Brush</b> colors whole objects or an outlined area (which becomes a separate part). <b>Insert → QR code</b> creates a printable QR code.</li>
+      <li>Export the finished model to <b>STL</b>, <b>3MF</b> (keeps colors and parts — for multi-color printing) or <b>OBJ</b> and open it in your 3D printer software.</li>
     </ol>
     <h3>Mouse</h3>
     <table class="keys">
@@ -28,7 +30,7 @@ function showHelpEN({ openModal, closeModal, $ }) {
    <div><h3>Keys</h3>
     <table class="keys">
      ${k('M', 'move mode')} ${k('R', 'rotate mode')} ${k('S', 'scale mode')} ${k('Q', 'hide arrows')}
-     ${k('L', 'ruler')} ${k('P', 'draw your own shape')}
+     ${k('L', 'ruler')} ${k('P', 'draw your own shape')} ${k('B', 'brush (paint)')}
      ${k('Arrows', 'move by one grid step (Shift ×10)')}
      ${k('Ctrl+↑', 'raise')} ${k('Ctrl+↓', 'lower')}
      ${k('D', 'drop to workplane')} ${k('H', 'solid ↔ hole')}
@@ -62,7 +64,9 @@ export function showHelp(ctx) {
       <li>Gwint wewnętrzny: wstaw <b>Otwór gwintowany</b> (sekcja Śruby i nakrętki) i zgrupuj z bryłą.</li>
       <li><b>Miarka</b> mierzy odległość między dwoma punktami, a <b>Rysuj</b> zamienia narysowany kontur w bryłę.</li>
       <li>Rysunek do odrysowania wstawisz jako szablon: <b>Wstaw → Obraz jako szablon</b>. Plik SVG może też stać się bryłą 3D.</li>
-      <li>Gotowy model wyeksportuj do <b>STL</b> lub <b>OBJ</b> i wczytaj w programie drukarki 3D.</li>
+      <li><b>Podziel</b>: zaznacz bryłę i kształt tnący, aby podzielić ją lub wyciąć z niej ten kształt, przetnij ją płaszczyzną albo pozwól, by <b>Auto-Split</b> podzielił model za duży na drukarkę.</li>
+      <li><b>Pędzel</b> koloruje całe obiekty albo zakreślony obszar (staje się osobną częścią). <b>Wstaw → Kod QR</b> tworzy kod QR do wydruku.</li>
+      <li>Gotowy model wyeksportuj do <b>STL</b>, <b>3MF</b> (zachowuje kolory i części — do druku wielokolorowego) lub <b>OBJ</b> i wczytaj w programie drukarki 3D.</li>
     </ol>
     <h3>Mysz</h3>
     <table class="keys">
@@ -76,7 +80,7 @@ export function showHelp(ctx) {
    <div><h3>Klawisze</h3>
     <table class="keys">
      ${k('M', 'tryb przesuwania')} ${k('R', 'tryb obracania')} ${k('S', 'tryb skalowania')} ${k('Q', 'ukryj strzałki')}
-     ${k('L', 'miarka')} ${k('P', 'rysuj własny kształt')}
+     ${k('L', 'miarka')} ${k('P', 'rysuj własny kształt')} ${k('B', 'pędzel (malowanie)')}
      ${k('Strzałki', 'przesuń o krok siatki (Shift ×10)')}
      ${k('Ctrl+↑', 'podnieś')} ${k('Ctrl+↓', 'opuść')}
      ${k('D', 'połóż na płaszczyźnie')} ${k('H', 'bryła ↔ otwór')}

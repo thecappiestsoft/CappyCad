@@ -10,6 +10,7 @@ import polygonClipping from 'polygon-clipping';
 import { cleanGeom, swapWinding, fromPositions } from './geomutil.js';
 import { union, subtract } from './csg.js';
 import * as mech from './mech.js';
+import { qrMatrix } from './qr.js';
 
 export { swapWinding };
 const font = new Font(fontData);
@@ -223,6 +224,41 @@ export const SHAPES = {
       depth: { label: 'Głębokość (0 = wysokość nakrętki)', type: 'num', def: 0, min: 0, max: 50, step: 0.1 },
       through: { label: 'Otwór przelotowy w dół (mm)', type: 'num', def: 0, min: 0, max: 100, step: 1 },
       luz: LUZ(0.2),
+    },
+  },
+
+  qr: {
+    label: 'Kod QR',
+    color: '#212529',
+    keepScale: true,
+    real: true,
+    params: {
+      text: { label: 'Treść (tekst lub adres www)', def: 'https://www.cappysoft.pl', type: 'text' },
+      style: {
+        label: 'Rodzaj',
+        type: 'select',
+        def: 'plate',
+        options: [
+          ['plate', 'płytka z wypukłym kodem'],
+          ['engraved', 'kod wycięty w płytce'],
+          ['modules', 'same moduły kodu (bez płytki)'],
+        ],
+      },
+      ecl: {
+        label: 'Odporność na uszkodzenia',
+        type: 'select',
+        def: 'M',
+        options: [
+          ['L', 'niska (7%) — najmniej modułów'],
+          ['M', 'średnia (15%)'],
+          ['Q', 'wysoka (25%)'],
+          ['H', 'najwyższa (30%)'],
+        ],
+      },
+      module: { label: 'Rozmiar modułu (mm)', type: 'num', def: 1.5, min: 0.4, max: 10, step: 0.1 },
+      base: { label: 'Grubość płytki (mm)', type: 'num', def: 2, min: 0.4, max: 20, step: 0.2 },
+      relief: { label: 'Wysokość / głębokość kodu (mm)', type: 'num', def: 1, min: 0.2, max: 10, step: 0.2 },
+      border: { label: 'Margines (moduły)', type: 'num', def: 2, min: 0, max: 8, step: 1 },
     },
   },
 
@@ -500,9 +536,68 @@ export function makeRaw(type, params = {}) {
       return mech.nutTrap(params);
     case 'sketch':
       return sketchGeometry(params);
+    case 'qr':
+      return qrGeometry(params);
     default:
       return new THREE.BoxGeometry(20, 20, 20);
   }
+}
+
+// Macierz modułów kodu QR: z treści (params.text) albo z obrazu (params.grid — wiersze „0/1” rozdzielone „/”)
+export function qrModules(params = {}) {
+  if (typeof params.grid === 'string' && params.grid.length) {
+    const rows = params.grid.split('/');
+    return { size: rows.length, get: (x, y) => rows[y]?.[x] === '1' };
+  }
+  return qrMatrix(String(params.text ?? '') || ' ', params.ecl || 'M');
+}
+const pnum = (v, def, min, max) => {
+  const n = Number(v);
+  return Math.min(max, Math.max(min, isFinite(n) ? n : def));
+};
+
+// Kod QR jako bryła: moduły łączone w poziome odcinki (mniej brył do zsumowania), suma/różnica przez Manifold.
+// Moduły są minimalnie poszerzone, żeby stykające się narożnikami tworzyły szczelną, jednoznaczną bryłę.
+function qrGeometry(params) {
+  const q = qrModules(params);
+  const m = pnum(params.module, 1.5, 0.4, 10),
+    base = pnum(params.base, 2, 0.4, 20),
+    relief = pnum(params.relief, 1, 0.2, 10),
+    border = Math.round(pnum(params.border, 2, 0, 8));
+  const style = ['plate', 'engraved', 'modules'].includes(params.style) ? params.style : 'plate';
+  const n = q.size,
+    full = (n + border * 2) * m,
+    eps = Math.min(0.01, m * 0.01);
+  const half = (n * m) / 2;
+  const cut = style === 'engraved';
+  const depth = cut ? Math.min(relief, base * 0.95) : relief;
+  const z0 = style === 'plate' ? base : cut ? base - depth : 0;
+  const h = cut ? depth + 1 : relief; // otwory wystają ponad płytkę
+  const runs = [];
+  for (let y = 0; y < n; y++) {
+    let x = 0;
+    while (x < n) {
+      if (!q.get(x, y)) {
+        x++;
+        continue;
+      }
+      let x2 = x;
+      while (x2 + 1 < n && q.get(x2 + 1, y)) x2++;
+      const w = (x2 - x + 1) * m + eps * 2;
+      const b = new THREE.BoxGeometry(w, m + eps * 2, h);
+      b.translate(
+        -half + x * m + (x2 - x + 1) * m * 0.5,
+        half - y * m - m / 2,
+        z0 + h / 2 - (style === 'plate' ? eps : 0),
+      );
+      runs.push(b);
+      x = x2 + 1;
+    }
+  }
+  if (style === 'modules') return runs.length ? union(runs) : new THREE.BoxGeometry(m, m, relief);
+  const plate = new THREE.BoxGeometry(full, full, base).translate(0, 0, base / 2);
+  if (!runs.length) return plate;
+  return cut ? subtract(plate, runs) : union([plate, ...runs]);
 }
 
 function dedupe(pts) {

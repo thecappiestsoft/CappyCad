@@ -106,7 +106,68 @@ function run(geoms, fn) {
   }
 }
 
-export const union = list => run(list, ms => (ms.length === 1 ? ms[0] : M.Manifold.union(ms)));
+// Zgrzewa wierzchołki bliższe niż tol (we wszystkich geometriach naraz). Stykające się części (np. po
+// podziale) mają wspólne powierzchnie, których wierzchołki po zapisie jako float32 różnią się o ułamki
+// mikrometra — bez zgrzania ich suma miałaby mikroskopijne szczeliny i nieszczelne krawędzie.
+function weld(geoms, tol) {
+  const cells = new Map();
+  const key = (i, j, k) => i + ',' + j + ',' + k;
+  return geoms.map(g => {
+    const src = positionsOf(g);
+    const out = new Float32Array(src.length);
+    for (let n = 0; n < src.length; n += 3) {
+      const x = src[n],
+        y = src[n + 1],
+        z = src[n + 2];
+      const ci = Math.floor(x / tol),
+        cj = Math.floor(y / tol),
+        ck = Math.floor(z / tol);
+      let rep = null;
+      for (let a = -1; a <= 1 && !rep; a++)
+        for (let b = -1; b <= 1 && !rep; b++)
+          for (let c = -1; c <= 1 && !rep; c++) {
+            const list = cells.get(key(ci + a, cj + b, ck + c));
+            if (list)
+              for (const p of list)
+                if (Math.abs(p[0] - x) <= tol && Math.abs(p[1] - y) <= tol && Math.abs(p[2] - z) <= tol) {
+                  rep = p;
+                  break;
+                }
+          }
+      if (!rep) {
+        rep = [x, y, z];
+        const k = key(ci, cj, ck);
+        if (!cells.has(k)) cells.set(k, []);
+        cells.get(k).push(rep);
+      }
+      out[n] = rep[0];
+      out[n + 1] = rep[1];
+      out[n + 2] = rep[2];
+    }
+    const w = new THREE.BufferGeometry();
+    w.setAttribute('position', new THREE.BufferAttribute(out, 3));
+    return w;
+  });
+}
+// Suma (grupowanie): ze zgrzaniem wierzchołków, a gdy to zawiedzie — bez niego
+export function union(list) {
+  const op = ms => (ms.length === 1 ? ms[0] : M.Manifold.union(ms));
+  if (list.length > 1)
+    try {
+      return run(weld(list, 1e-4), op);
+    } catch {
+      /* zgrzanie uszkodziło którąś bryłę — liczymy na oryginalnych */
+    }
+  return run(list, op);
+}
+// Suma do eksportu: najpierw zgrzanie wierzchołków, potem suma i uproszczenie mikroskopijnych ścianek
+export const unionExport = (list, tol = 1e-3) =>
+  run(list.length > 1 ? weld(list, tol) : list, ms => {
+    const u = ms.length === 1 ? ms[0] : M.Manifold.union(ms);
+    const r = u.simplify(tol);
+    if (!ms.includes(u)) u.delete();
+    return r;
+  });
 export function subtract(a, list) {
   return run([a, ...list], ([base, ...cut]) => {
     if (!cut.length) return base;
@@ -124,5 +185,21 @@ export function clean(g) {
     return run([g], ([m]) => m);
   } catch {
     return null;
+  }
+}
+
+// Rozdziela bryłę na osobne, niestykające się części (np. po przecięciu). Zwraca listę geometrii.
+export function decompose(g) {
+  const m = toManifold(g);
+  try {
+    const parts = m.decompose();
+    const out = [];
+    for (const p of parts) {
+      if (p.volume() > 1e-6) out.push(fromManifold(p));
+      p.delete();
+    }
+    return out;
+  } finally {
+    m.delete();
   }
 }

@@ -19,6 +19,9 @@ NOTES
 
 Lessons: 10 example projects and 8 step-by-step exercises whose steps tick off automatically.
 There is also a banana for scale (about 18 cm).
+New in 2.7: export to 3MF (colors and separate parts for multi-color printing), the Split menu
+(split or cut with a shape, split with a plane, Auto-Split for models larger than the printer),
+the Brush tool (B) for coloring objects or outlined areas, and QR codes (from text or from an image).
 Cappy, the capybara in the bottom-left corner, gives hints while you work and tips when clicked
 (hints can be muted in the speech bubble).
 The interface language (Polish / English) is switched with the PL | EN toggle in the top-right corner,
