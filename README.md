@@ -68,7 +68,9 @@ src/                    kod interfejsu (przeglądarka / okno Electrona)
   help.js               okno pomocy (PL / EN)
   i18n.js, i18n-en.js   tłumaczenie interfejsu i słownik angielski
   icons.js              ikony SVG interfejsu
-  zip.js                zapis archiwum ZIP (pobieranie STL/OBJ w przeglądarce)
+  qr.js                 generator kodów QR (ISO/IEC 18004) i odczyt kodu z obrazu
+  threemf.js            zapis 3MF (osobne bryły z kolorami — druk wielokolorowy)
+  zip.js                zapis archiwum ZIP (3MF, paczki STL, pobieranie w przeglądarce)
   index.html, style.css układ i wygląd (motyw jasny i ciemny)
   assets/               obrazy interfejsu (ikona, Cappy)
   data/                 dane generowane: czcionka (font.json), obrys kapibary (capy-outline.json)
@@ -94,6 +96,9 @@ Szczegóły: **[docs/ARCHITEKTURA.md](docs/ARCHITEKTURA.md)**.
   (środek podstawy w punkcie 0,0,0) i zapamiętywana; obiekt na scenie to ta geometria przeskalowana do wymiarów w mm.
 - **Grupowanie** wykonuje operacje logiczne (suma brył, odjęcie otworów) silnikiem **Manifold**, który zawsze zwraca
   szczelną siatkę — wymóg slicerów drukarek 3D. Eksport STL łączy wszystkie bryły w jedną szczelną bryłę.
+- **Dzielenie modelu** (menu *Podziel*): kształtem, płaszczyzną, na osobne bryły i **Auto-Split** dla modeli
+  większych niż drukarka. Wyniki są grupami, więc można je rozgrupować. **Pędzel** koloruje obiekty lub zakreślone
+  obszary, a **eksport 3MF** zachowuje kolory i części dla druku wielokolorowego.
 - **Projekt** (`.cappycad`) to JSON: lista obiektów z parametrami i położeniem. Grupy przechowują swoje części,
   więc można je rozgrupować także po ponownym otwarciu.
 - **Offline i prywatność:** program nie wykonuje żadnych połączeń sieciowych; Electron blokuje nawigację i nowe okna.

@@ -60,8 +60,30 @@ THREE.Mesh: scale = size / baseSize      obiekt na scenie ma wymiary `size` (mm)
   dokładnie dwóch trójkątów). Gdy wejście nie jest zamknięte (np. uszkodzony import STL), działa zapasowy
   `three-bvh-csg`.
 - Silnik ładuje się asynchronicznie (`csg.ready`); paleta i przywracanie projektu czekają na niego.
+- **Eksport 3MF** (`export3MF` → `src/threemf.js`): każda bryła osobno, z nazwą i kolorem (`basematerials`), w archiwum
+  ZIP zgodnym ze specyfikacją 3MF Core — do druku wielokolorowego. **STL osobno (ZIP)**: każda bryła w swoim pliku.
 - **Eksport STL** (`exportSolid`): wszystkie bryły są łączone w jedną szczelną bryłę. **OBJ**: osobne obiekty
   z kolorami, każdy oczyszczony.
+
+### Dzielenie, wycinanie kształtem, pędzel (sekcja „dzielenie i wycinanie” w `app.js`)
+
+- Wynik cięcia to zwykła **grupa**, więc jest zapisywany w projekcie i można go rozgrupować:
+  część poza kształtem = `[bryła, kształt jako otwór]`, część w kształcie = `[bryła, (duży prostopadłościan − kształt) jako otwór]`.
+- **Podział płaszczyzną** i **Auto-Split** (`gridPieces`) odejmują od bryły prostopadłościany leżące poza daną komórką
+  siatki cięć. Auto-Split liczy liczbę cięć w każdej osi z wymiarów drukarki (`autoSplitPlan`) i może rozłożyć części
+  na płaszczyźnie (`layoutPieces`).
+- **Rozdziel na osobne bryły** używa `Manifold.decompose()` (`csg.decompose`) — wynikiem są modele siatkowe (`mesh`).
+- **Pędzel — obszar**: odręczny obrys z ekranu (`lassoPolygons`, rozplątany przez polygon-clipping) jest wyciągany
+  wzdłuż promieni kamery w bryłę (`lassoPrism`), która dzieli trafione bryły jak „Podziel kształtem”.
+- Sumy brył zgrzewają najpierw bardzo bliskie wierzchołki (`weld` w `solid.js`), bo stykające się części po podziale
+  różnią się o ułamki mikrometra po zapisie jako float32; eksport dodatkowo wykonuje `simplify`.
+
+### Kody QR (`src/qr.js`)
+
+- `qrMatrix(text, ecl)` — własny koder (ISO/IEC 18004: tryb bajtowy UTF-8, wersje 1–40, korekcja L/M/Q/H, wybór maski).
+- `gridFromImage()` — odczyt modułów z obrazu prosto ustawionego kodu (próg Otsu, wzorzec pozycjonujący 1:1:3:1:1).
+- Kształt `qr` (`shapes.js`): parametry jak w `SHAPES.qr`; kod odczytany z obrazu jest w `params.grid`
+  (wiersze „0/1” rozdzielone „/”). Moduły są łączone w poziome odcinki i sumowane silnikiem Manifold.
 
 ## 5. Formaty danych
 

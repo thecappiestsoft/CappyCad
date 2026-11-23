@@ -96,6 +96,108 @@ window.__runSmokeTest = async function () {
     C.undo();
     C.redo();
 
+    // ---- Kod QR, dzielenie, pędzel, 3MF (na czystej scenie)
+    C.loadProject(JSON.stringify({ app: 'CappyCad', format: 2, objects: [] }), null, 'nowe.cappycad');
+    check(C.qrModules({ text: 'CappyCad' }).size === 21, 'kod QR: rozmiar macierzy');
+    const qr = C.addShape('qr', V(0, 0));
+    check(qr && C.sizeOf(qr).x > 20 && C.sizeOf(qr).z > 2, 'kod QR jako bryła');
+    C.setSelection([qr]);
+    check(openEdges(C.exportSTLGeometry()) === 0, 'kod QR: szczelna siatka');
+    C.splitQRColors(qr);
+    check(C.objects.length === 2 && new Set(C.objects.map(o => o.color)).size === 2, 'kod QR: płytka + moduły');
+
+    // Podział kształtem: część poza kształtem i część w kształcie (w kolorze kształtu)
+    C.loadProject(JSON.stringify({ app: 'CappyCad', format: 2, objects: [] }), null, 'nowe.cappycad');
+    const cb = C.addShape('box', V(0, 0));
+    const cs = C.addShape('sphere', V(10, 0));
+    C.setSelection([cb, cs]);
+    C.cutWithShape('split');
+    await wait(1500);
+    check(
+      C.objects.length === 2 && C.objects.some(o => o.color === cs.color) && C.objects.some(o => o.color === cb.color),
+      'podział kształtem na 2 części',
+    );
+    C.setSelection([...C.objects]);
+    check(openEdges(C.exportSTLGeometry()) === 0, 'podział kształtem: szczelny STL');
+    C.groupSelection();
+    await wait(1500);
+    check(openEdges(C.objects[0].mesh.geometry) === 0, 'ponowne zgrupowanie części: szczelna bryła');
+    C.undo();
+    C.undo();
+    check(C.objects.length === 2 && C.objects.some(o => o.type === 'sphere'), 'cofnięcie podziału');
+
+    // Wycięcie kształtem
+    C.setSelection([...C.objects]);
+    C.cutWithShape('cut');
+    await wait(1500);
+    check(C.objects.length === 1 && C.objects[0].type === 'group', 'wycięcie kształtem');
+
+    // Podział płaszczyzną
+    C.loadProject(JSON.stringify({ app: 'CappyCad', format: 2, objects: [] }), null, 'nowe.cappycad');
+    const pb = C.addShape('box', V(0, 0));
+    C.splitByPlane([pb], 'z', 5, 4);
+    await wait(1500);
+    const hs = C.objects.map(o => Math.round(C.sizeOf(o).z)).sort((a, b) => a - b);
+    check(C.objects.length === 2 && hs[0] === 5 && hs[1] === 15, `podział płaszczyzną (${hs.join(', ')})`);
+
+    // Auto-Split: belka 500 mm na drukarkę 200 mm -> 3 części, każda mieści się w drukarce
+    C.loadProject(JSON.stringify({ app: 'CappyCad', format: 2, objects: [] }), null, 'nowe.cappycad');
+    const big = C.addShape('box', V(0, 0));
+    big.mesh.scale.set(25, 2, 1);
+    C.commit();
+    C.autoSplit([big], { vol: [200, 200, 200], spare: 10, gap: 5, lay: true });
+    await wait(2500);
+    check(
+      C.objects.length === 3 && C.objects.every(o => C.sizeOf(o).x <= 190.01 && Math.abs(o.mesh.position.z) < 0.01),
+      `Auto-Split (${C.objects.length} części)`,
+    );
+    C.setSelection([C.objects[1]]);
+    check(openEdges(C.exportSTLGeometry()) === 0, 'Auto-Split: szczelna część');
+
+    // Rozdzielenie na osobne bryły
+    C.loadProject(JSON.stringify({ app: 'CappyCad', format: 2, objects: [] }), null, 'nowe.cappycad');
+    const a1 = C.addShape('box', V(0, 0)),
+      a2 = C.addShape('box', V(40, 0));
+    C.setSelection([a1, a2]);
+    C.groupSelection();
+    await wait(1500);
+    C.setSelection([...C.objects]);
+    C.separateParts();
+    await wait(1500);
+    check(C.objects.length === 2 && C.objects.every(o => o.type === 'mesh'), 'rozdzielenie na osobne bryły');
+
+    // Pędzel — obszar (szkic) staje się osobną częścią w nowym kolorze
+    C.loadProject(JSON.stringify({ app: 'CappyCad', format: 2, objects: [] }), null, 'nowe.cappycad');
+    const pbx = C.addShape('box', V(0, 0));
+    pbx.mesh.scale.set(3, 3, 0.5);
+    C.commit();
+    C.setSelection([]);
+    C.setView('top', false);
+    await wait(50);
+    const vr = document.getElementById('viewport').getBoundingClientRect();
+    const [sx, sy] = C.screenOfPoint(0, 0, 10);
+    const cx = sx - vr.left,
+      cy = sy - vr.top;
+    C.setBrush('#1c7ed6', 'region');
+    C.paintRegion([
+      [cx - 15, cy - 15],
+      [cx + 15, cy - 15],
+      [cx + 15, cy + 15],
+      [cx - 15, cy + 15],
+    ]);
+    await wait(1500);
+    check(C.objects.length === 2 && C.objects.some(o => o.color === '#1c7ed6'), 'pędzel: kolorowanie obszaru');
+    C.setSelection([...C.objects]);
+    check(openEdges(C.exportSTLGeometry()) === 0, 'pędzel: szczelny STL');
+
+    // Eksport 3MF: archiwum z modelem i kolorami
+    const m3 = await C.build3MFBlob().text();
+    check(
+      m3.includes('3dmanufacturing') && m3.includes('#1C7ED6FF') && (m3.match(/<object /g) || []).length === 2,
+      'eksport 3MF z kolorami',
+    );
+    C.setView('home', false);
+
     // Motyw i język
     C.setTheme('dark');
     C.setTheme('light');
