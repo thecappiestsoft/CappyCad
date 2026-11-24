@@ -4,3 +4,6 @@
 *.ico binary
 *.icns binary
 *.ttf binary
+
+# gotowy program w jednym pliku — generowany przez npm run build:html
+/index.html linguist-generated=true -diff
