@@ -1,7 +1,8 @@
 // Składa cały program w JEDEN plik HTML (kod, style, obrazy, czcionka i silnik brył w środku).
 // Plik działa offline: z dysku, z pendrive'a albo z dowolnego serwera WWW.
 //
-//   npm run build:html              -> dist/CappyCad.html
+//   npm run build:html              -> dist/CappyCad.html oraz index.html w katalogu głównym
+//                                     (strona startowa repozytorium, np. dla GitHub Pages)
 //   npm run build:html -- --artifact   dodatkowo dist/CappyCad-artifact.html
 //                                     (sama treść bez <html>/<head>/<body> — do publikacji jako strona w Claude)
 import * as esbuild from 'esbuild';
@@ -45,6 +46,9 @@ fs.mkdirSync(OUT_DIR, { recursive: true });
 fs.writeFileSync(`${OUT_DIR}/CappyCad.html`, html);
 const mb = f => (fs.statSync(f).size / 1048576).toFixed(2) + ' MB';
 console.log(`Gotowe: ${OUT_DIR}/CappyCad.html (${mb(`${OUT_DIR}/CappyCad.html`)})`);
+// ten sam plik jako index.html w katalogu głównym — otwiera program pod adresem samego katalogu / repozytorium
+fs.writeFileSync('index.html', html);
+console.log('Gotowe: index.html (katalog główny)');
 
 // 4. Opcjonalnie: wariant do publikacji jako strona w Claude (tytuł i style na początku, potem treść <body>)
 if (process.argv.includes('--artifact')) {

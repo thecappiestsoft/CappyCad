@@ -25,7 +25,7 @@ Narzędzia deweloperskie przeglądarki w oknie programu: **Ctrl+Shift+I**.
 | `npm run build`          | tylko buduje interfejs do `app/`                                           |
 | `npm test`               | test dymny: uruchamia program i sprawdza kluczowe funkcje (ok. 15 s)       |
 | `npm run check:mesh`     | sprawdza, czy wszystkie kształty dają szczelne siatki do druku 3D          |
-| `npm run build:html`     | składa cały program w jeden plik `dist/CappyCad.html`                      |
+| `npm run build:html`     | składa cały program w jeden plik `dist/CappyCad.html` i `index.html`       |
 | `npm run dist:win`       | instalator i wersja przenośna Windows → `release/`                         |
 | `npm run dist:mac`       | aplikacja macOS (Intel + Apple Silicon) → `release/`                       |
 | `npm run dist:linux`     | `.deb`, `.AppImage`, `.tar.gz` → `release/`                                |
@@ -45,6 +45,9 @@ Pierwsze uruchomienie wymaga internetu (pobranie zależności) i trwa kilka minu
 | Linux   | `./build-linux.sh`                                    | `./build-html.sh`                       |
 
 - Wyniki: wersje desktopowe w `release/`, plik HTML w `dist/CappyCad.html`.
+- `index.html` w katalogu głównym to ten sam program w jednym pliku — trzymany w repozytorium, żeby działał
+  od razu jako strona (np. GitHub Pages: Settings → Pages → gałąź `main`, katalog `/`). Odśwież go poleceniem
+  `npm run build:html` po każdej zmianie w `src/`.
 - Test można pominąć: `build-windows.bat --skip-tests`, `./build-linux.sh --skip-tests`.
 - Każdy system buduje wersję dla siebie (Windows → Windows, Mac → Mac, Linux → Linux).
   Wszystkie wersje z jednego komputera: `npm run dist:all` na Linuksie (opis w `scripts/build-all.mjs`).
@@ -82,6 +85,7 @@ assets/                 ikony aplikacji dla instalatorów (ico, icns, png) i iko
 docs/                   dokumentacja: architektura, licencje; docs/user/ — instrukcje dla użytkowników
 build-*.bat / .command / .sh   gotowe skrypty budowania
 electron-builder.yml    konfiguracja instalatorów i paczek
+index.html              gotowy program w jednym pliku (generowany: npm run build:html) — strona WWW
 ```
 
 Foldery `app/`, `dist/`, `release/` i `node_modules/` powstają podczas budowania — nie trzymaj ich w repozytorium.

@@ -139,7 +139,7 @@ Biblioteka „Moje kształty” (`.cappylib`): `{ app, library: [{ id, name, obj
 ## 8. Budowanie i testy
 
 - `scripts/esbuild-options.mjs` — wspólne ustawienia pakowania (JSON i WASM wbudowane w kod).
-- `scripts/build.mjs` → `app/` (Electron); `scripts/build-html.mjs` → `dist/CappyCad.html`.
+- `scripts/build.mjs` → `app/` (Electron); `scripts/build-html.mjs` → `dist/CappyCad.html` i `index.html` (katalog główny, wersja do publikacji jako strona WWW).
 - `electron-builder.yml` — instalatory; `scripts/after-pack.cjs` — podpis ad-hoc aplikacji macOS.
 - `test/run.mjs` uruchamia `test/electron-runner.cjs`, który otwiera program i wykonuje
   `test/smoke.in-page.js` przez mostek `window.__cappycad` (koniec `app.js`). Na serwerze bez ekranu używa `xvfb-run`.
